@@ -1,0 +1,189 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+  /* Blue water color to match the gif - won't be noticeable if gif doesn't cover */
+  background-color: #4a9fd8;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#water-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#water-background img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Default full-screen layout for desktop */
+body.desktop #canvas-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+body.desktop #hud-container {
+  display: block;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 300px;
+  height: auto;
+  pointer-events: none;
+  z-index: 100;
+}
+
+body.desktop #hud-base {
+  display: none;
+}
+
+body.desktop #hud-overlay {
+  display: none;
+}
+
+/* On mobile, let canvas fill above HUD */
+body.mobile {
+  display: flex;
+  flex-direction: column;
+}
+
+body.mobile #canvas-container {
+  flex: 1 1 auto;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+#renderCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 2;
+}
+
+body.mobile #hud-container {
+  position: relative;
+  width: 100%;
+  pointer-events: none;
+  z-index: 100;
+}
+
+#hud-base {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+#rod-image {
+  position: absolute;
+  width: 45%;
+  height: auto;
+  bottom: 0;
+  right: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+body.desktop #rod-image {
+  width: 200px;
+}
+
+#reelspinna-container {
+  position: absolute;
+  width: 45%;
+  aspect-ratio: 1;
+  bottom: 4px;
+  right: 0;
+  pointer-events: auto;
+  user-select: none;
+  cursor: grab;
+  z-index: 10;
+}
+
+body.desktop #reelspinna-container {
+  width: 200px;
+  bottom: 0;
+}
+
+#reelspinna-container:active {
+  cursor: grabbing;
+}
+
+#reelspinna-image {
+  position: absolute;
+  width: 100%;
+  height: auto;
+  left: 0;
+  bottom: 0;
+  pointer-events: none;
+  user-select: none;
+  transform-origin: center center;
+}
+
+#hud-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#joystickWrapper1 {
+  position: absolute;
+  pointer-events: auto;
+  left: 24.5%;
+  bottom: 35%;
+}
+
+.front {
+  position: relative;
+  overflow: visible;
+  border: none !important;
+  background: transparent !important;
+  width: 100px;
+  height: 100px;
+}
+
+.front::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  transform: translate(-50%, -50%);
+  background-image: url('assets/hud/joystick.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.back {
+  background: transparent !important;
+  border: none;
+}

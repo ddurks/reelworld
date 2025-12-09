@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>reel world</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
+  </head>
+  <body>
+    <div id="water-background">
+      <img src="assets/hud/water.gif" alt="Water" />
+    </div>
+    <h2 id="controls"></h2>
+    <div id="canvas-container">
+      <canvas id="renderCanvas"></canvas>
+    </div>
+    <div id="hud-container">
+      <img id="hud-base" src="assets/hud/controller.png" alt="HUD" />
+      <img id="rod-image" src="assets/hud/rod.png" alt="Rod" />
+      <div id="reelspinna-container">
+        <img
+          id="reelspinna-image"
+          src="assets/hud/reelspinna.png"
+          alt="Reel Spinna"
+        />
+      </div>
+      <div id="hud-overlay">
+        <div id="joystickWrapper1"></div>
+      </div>
+      <div id="left-controls"></div>
+    </div>
+
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stats.js@0.17.0/build/stats.min.js"></script>
+    <script type="text/javascript" src="./lib/nipplejs.js"></script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
