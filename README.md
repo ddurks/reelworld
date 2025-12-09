@@ -1,6 +1,7 @@
-# Reelworld
+# Reel World
 
-A Babylon.js snow world exploration game with character controls, procedural terrain, and dynamic weather effects.
+![assets/water.gif]
+Reel Em in!
 
 ## Setup
 
