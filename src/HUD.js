@@ -60,6 +60,8 @@ export class ReelSpinnaControls {
     this.isDragging = false;
     this.currentButton = null;
     this.lastAngle = 0;
+    this.buttonPressed = false;
+    this.buttonJustPressed = false;
 
     this.images = {
       default: "assets/hud/reelspinna.png",
@@ -128,6 +130,9 @@ export class ReelSpinnaControls {
   onStart(event, button) {
     this.isDragging = true;
     this.currentButton = button;
+    this.buttonPressed = true;
+    this.buttonJustPressed = true;
+    console.log("ReelSpinna button pressed:", button);
 
     const rect = this.container.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
@@ -171,332 +176,91 @@ export class ReelSpinnaControls {
 
     this.isDragging = false;
     this.currentButton = null;
+    this.buttonPressed = false;
     this.reelspinnaImage.src = this.images.default;
   }
 
   update(deltaTime) {
-    // No per-frame updates needed
+    // Reset buttonJustPressed after frame
+    this.buttonJustPressed = false;
   }
 }
 
-const footBoneNames = ["foot.l", "foot.r"];
-
 export class HUD {
-  walkDirection = BABYLON.Vector3.Zero();
-  rotateAngle = new BABYLON.Vector3(0, 1, 0);
-  cameraTarget = BABYLON.Vector3.Zero();
-  defaultWalkVelocity = 10;
-  walkVelocity = 10;
-  fadeDuration = 0.2;
-  oldPosition = null;
-  walkStart = null;
-  level = null;
-  joystick = null;
-  jumpRequested = false;
-  prevJumpRequested = false;
-  isJumping = false;
-  isStartingJump = false;
-
-  constructor(
-    model,
-    physicsBody,
-    animationsMap,
-    camera,
-    currentAction,
-    level,
-    isMobile
-  ) {
-    this.model = model;
-    this.physicsBody = physicsBody;
-    this.animationsMap = animationsMap;
-    this.currentAction = currentAction;
-    this.camera = camera;
-    this.level = level;
+  constructor(isMobile, reelGuy) {
     this.isMobile = isMobile;
+    this.reelGuy = reelGuy;
+    this.joystick = null;
+    this.aPressed = false;
+    this.bPressed = false;
+    this.prevJumpRequested = false;
 
     if (isMobile) {
       this.setupMobileControls();
     }
 
-    // Find skeleton
-    this.skeleton = null;
-    model.getChildMeshes().forEach((mesh) => {
-      if (mesh.skeleton) {
-        this.skeleton = mesh.skeleton;
-      }
-    });
-
-    // Store center offset for physics sync (7th parameter)
-    this.centerOffset = arguments[6] || new BABYLON.Vector3(0, 0, 0);
-
-    // Initialize ReelSpinna controls
     this.reelSpinnaControls = new ReelSpinnaControls();
+    this.keysPressed = {};
+    this.setupKeyboardControls();
   }
 
-  update(delta, keysPressed) {
-    const directionPressed = [W, A, S, D].some(
-      (key) => keysPressed[key] === true
-    );
-    const joystickPressed = this.joystick
-      ? JOY_DIRS.some((key) => this.joystick[key] > 0)
-      : false;
-
-    const jumpRequested = keysPressed[SPACE] || this.aPressed;
-
-    if (jumpRequested && !this.prevJumpRequested && !this.isJumping) {
-      this.isStartingJump = true;
-    }
-
-    let play = this.currentAction;
-    if (this.isStartingJump) {
-      play = "jump";
-    } else if (directionPressed || joystickPressed) {
-      if (this.isJumping) {
-        play = "float";
-      } else {
-        play = "walk";
-      }
-      this.applyMovement(directionPressed, joystickPressed, keysPressed);
-    } else {
-      if (this.walkStart !== null) {
-        this.walkStart = null;
-        this.walkVelocity = this.defaultWalkVelocity;
-      }
-      play = "idle";
-    }
-
-    this.updateAnim(
-      play,
-      delta,
-      this.isStartingJump
-        ? () => {
-            const impulse = new BABYLON.Vector3(0, 100, 0);
-            this.physicsBody.physicsBody.applyImpulse(
-              impulse,
-              this.model.position
-            );
-            this.isStartingJump = false;
-            this.isJumping = true;
-          }
-        : undefined
+  setupKeyboardControls() {
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        this.keysPressed[event.key.toLowerCase()] = true;
+      },
+      false
     );
 
-    if (this.level.planeMeshes) {
-      this.alignFeetToGround();
-    }
-
-    // Keep physics body upright (only allow Y-axis rotation from character)
-    if (this.model.rotationQuaternion) {
-      // Extract only Y rotation from character
-      const euler = this.model.rotationQuaternion.toEulerAngles();
-      this.physicsBody.rotationQuaternion = BABYLON.Quaternion.RotationAxis(
-        BABYLON.Vector3.Up(),
-        euler.y
-      );
-    }
-
-    // Update ReelSpinna
-    if (this.reelSpinnaControls) {
-      this.reelSpinnaControls.update(delta);
-    }
-
-    this.prevJumpRequested = jumpRequested;
-  }
-
-  applyMovement(directionPressed, joystickPressed, keysPressed) {
-    if (this.walkStart === null) {
-      this.walkStart = Date.now();
-    }
-
-    const cameraDirection = this.camera.getForwardRay().direction.clone();
-    cameraDirection.y = 0;
-    cameraDirection.normalize();
-
-    const cameraRight = BABYLON.Vector3.Cross(
-      cameraDirection,
-      BABYLON.Vector3.Up()
-    ).normalize();
-
-    let inputVec = BABYLON.Vector3.Zero();
-    if (this.isMobile && this.joystick) {
-      const forward = -this.joystick.forward;
-      const right = -(this.joystick.right - this.joystick.left);
-
-      inputVec = cameraDirection.scale(forward).add(cameraRight.scale(right));
-    } else {
-      let forward = 0,
-        right = 0;
-      if (keysPressed[W]) forward += 1;
-      if (keysPressed[S]) forward -= 1;
-      if (keysPressed[D]) right -= 1;
-      if (keysPressed[A]) right += 1;
-
-      inputVec = cameraDirection.scale(forward).add(cameraRight.scale(right));
-    }
-
-    if (inputVec.lengthSquared() > 0) {
-      inputVec.normalize();
-      this.walkDirection = BABYLON.Vector3.Lerp(
-        this.walkDirection,
-        inputVec,
-        0.2
-      );
-
-      const targetAngle = Math.atan2(
-        -this.walkDirection.x,
-        -this.walkDirection.z
-      );
-      const targetRotation = BABYLON.Quaternion.RotationAxis(
-        BABYLON.Vector3.Up(),
-        targetAngle
-      );
-      this.model.rotationQuaternion = BABYLON.Quaternion.Slerp(
-        this.model.rotationQuaternion || BABYLON.Quaternion.Identity(),
-        targetRotation,
-        0.2
-      );
-
-      const currentVelocity = this.physicsBody.physicsBody.getLinearVelocity();
-      const targetVel = this.walkDirection.scale(this.walkVelocity);
-      const newVelocity = new BABYLON.Vector3(
-        currentVelocity.x + (targetVel.x - currentVelocity.x) * 0.2,
-        currentVelocity.y,
-        currentVelocity.z + (targetVel.z - currentVelocity.z) * 0.2
-      );
-      this.physicsBody.physicsBody.setLinearVelocity(newVelocity);
-    } else {
-      this.walkDirection = BABYLON.Vector3.Lerp(
-        this.walkDirection,
-        BABYLON.Vector3.Zero(),
-        0.2
-      );
-      const currentVelocity = this.physicsBody.physicsBody.getLinearVelocity();
-      const newVelocity = new BABYLON.Vector3(
-        currentVelocity.x * 0.8,
-        currentVelocity.y,
-        currentVelocity.z * 0.8
-      );
-      this.physicsBody.physicsBody.setLinearVelocity(newVelocity);
-    }
-  }
-
-  alignFeetToGround() {
-    if (!this.skeleton) return;
-
-    footBoneNames.forEach((boneName) => {
-      const bone = this.skeleton.bones.find((b) => b.name === boneName);
-      if (!bone) return;
-
-      // Get bone world position
-      const worldMatrix = bone.getWorldMatrix();
-      const bonePos = BABYLON.Vector3.TransformCoordinates(
-        BABYLON.Vector3.Zero(),
-        worldMatrix
-      );
-
-      // Raycast down from foot to find ground
-      const ray = new BABYLON.Ray(
-        bonePos.add(new BABYLON.Vector3(0, 0.5, 0)),
-        new BABYLON.Vector3(0, -1, 0),
-        2
-      );
-
-      const hit = this.level.planeMeshes
-        .map((mesh) => {
-          const pickInfo = ray.intersectsMesh(mesh);
-          return pickInfo.hit ? pickInfo : null;
-        })
-        .filter((p) => p !== null)
-        .sort((a, b) => a.distance - b.distance)[0];
-
-      if (!hit) return;
-
-      // Get ground normal
-      const groundNormal = hit.getNormal(true);
-      if (!groundNormal) return;
-
-      // Calculate rotation to align foot with ground normal
-      // Start with the bone's current rotation
-      const currentRotation =
-        bone.getRotationQuaternion() || BABYLON.Quaternion.Identity();
-
-      // Calculate the target rotation based on ground normal
-      // We want the foot's "up" to point along the ground normal
-      const up = new BABYLON.Vector3(0, 1, 0);
-      const rotationAxis = BABYLON.Vector3.Cross(up, groundNormal);
-      const angle = Math.acos(
-        BABYLON.Vector3.Dot(up, groundNormal.normalize())
-      );
-
-      if (rotationAxis.length() > 0.001) {
-        const alignmentRotation = BABYLON.Quaternion.RotationAxis(
-          rotationAxis.normalize(),
-          angle
-        );
-
-        // Smoothly interpolate to the target rotation
-        const targetRotation = alignmentRotation.multiply(currentRotation);
-        bone.setRotationQuaternion(
-          BABYLON.Quaternion.Slerp(currentRotation, targetRotation, 0.3),
-          BABYLON.Space.WORLD
-        );
-      }
-    });
-  }
-
-  adjustHeightFromTerrain() {
-    // Terrain adjustment disabled - using physics-based collision instead
-    return;
-  }
-
-  stickFeetToTerrain() {
-    // Old full IK system - replaced with simpler foot rotation alignment
-    return;
-  }
-
-  updateAnim(play, delta, onComplete) {
-    const current = this.animationsMap.get(this.currentAction);
-
-    if (this.currentAction !== play) {
-      const toPlay = this.animationsMap.get(play);
-      if (current) {
-        current.stop();
-      }
-      if (toPlay) {
-        const animSpeed = play === "walk" ? 4.0 : 1.0;
-        toPlay.start(play !== "jump", animSpeed, toPlay.from, toPlay.to, false);
-      }
-      this.currentAction = play;
-    }
-
-    let speedMultiplier = 1;
-    if (this.walkStart !== null) {
-      const deltat = Date.now() - this.walkStart;
-      if (deltat > 2000) {
-        speedMultiplier = deltat / 2000;
-        if (speedMultiplier > 2) {
-          speedMultiplier = 2;
-        }
-      }
-      this.walkVelocity = this.defaultWalkVelocity * speedMultiplier;
-    }
-
-    if (current) {
-      const baseSpeed = this.currentAction === "walk" ? 2.0 : 1.0;
-      current.speedRatio = baseSpeed * speedMultiplier;
-    }
-
-    if (onComplete && current) {
-      const observer = current.onAnimationGroupEndObservable.addOnce(() => {
-        onComplete();
-      });
-    }
+    document.addEventListener(
+      "keyup",
+      (event) => {
+        this.keysPressed[event.key.toLowerCase()] = false;
+      },
+      false
+    );
   }
 
   setupMobileControls() {
     this.joystick = new Joystick();
+  }
 
-    this.aPressed = false;
-    this.bPressed = false;
+  getInput() {
+    const directionPressed = [W, A, S, D].some(
+      (key) => this.keysPressed[key] === true
+    );
+
+    const joystickPressed = this.joystick
+      ? JOY_DIRS.some((key) => this.joystick[key] > 0)
+      : false;
+
+    const jumpRequested = this.keysPressed[SPACE] || this.aPressed;
+
+    // Handle ReelSpinna button press
+    if (this.reelSpinnaControls && this.reelSpinnaControls.buttonJustPressed) {
+      console.log("Button press detected in HUD, toggling fishing mode");
+      if (this.reelGuy) {
+        this.reelGuy.toggleFishingMode();
+      }
+    }
+
+    // Update ReelSpinna
+    if (this.reelSpinnaControls) {
+      this.reelSpinnaControls.update(0);
+    }
+
+    const input = {
+      directionPressed,
+      joystickPressed,
+      keysPressed: this.keysPressed,
+      joystick: this.joystick,
+      jumpRequested,
+      prevJumpRequested: this.prevJumpRequested,
+    };
+
+    this.prevJumpRequested = jumpRequested;
+
+    return input;
   }
 }
