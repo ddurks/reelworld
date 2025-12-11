@@ -2,6 +2,7 @@ import { HUD } from "./HUD.js";
 import { Level } from "./Level.js";
 import { Fish } from "./Fish.js";
 import { ReelGuy } from "./ReelGuy.js";
+import { Pond } from "./Pond.js";
 
 export class ReelWorld {
   constructor(canvas, isMobile) {
@@ -14,6 +15,7 @@ export class ReelWorld {
     this.reelGuy = null;
     this.hud = null;
     this.fish = [];
+    this.ponds = []; // Array of Pond objects
     this.physicsEngine = null;
     this.frameCount = 0;
     this.lastTime = performance.now();
@@ -93,10 +95,10 @@ export class ReelWorld {
       console.log("Using simple background for mobile");
     }
 
-    // Camera
+    // Camera - positioned to look at character from the front
     this.camera = new BABYLON.ArcRotateCamera(
       "camera",
-      Math.PI / 2,
+      Math.PI, // Alpha: 180 degrees (looking from the front)
       Math.PI / 3,
       10,
       BABYLON.Vector3.Zero(),
@@ -166,10 +168,41 @@ export class ReelWorld {
       }
 
       if (mesh.name === "water" || mesh.name === "water.001") {
+        console.log(
+          "Found water mesh:",
+          mesh.name,
+          "at position:",
+          mesh.position
+        );
         waterMeshes.push(mesh);
+
+        // Add physics to water but with special collision filters
+        const waterPhysics = new BABYLON.PhysicsAggregate(
+          mesh,
+          BABYLON.PhysicsShapeType.MESH,
+          { mass: 0, restitution: 0.2, friction: 0.5 },
+          this.scene
+        );
+
+        if (waterPhysics.body.shape) {
+          // Water collides with fish (mask 8) but NOT character (mask 1)
+          waterPhysics.body.shape.filterMembershipMask = 4;
+          waterPhysics.body.shape.filterCollideMask = 8;
+        }
+
+        if (mesh.material) {
+          mesh.receiveShadows = true;
+        }
+        return;
       }
 
       if (mesh.name.toLowerCase().includes("ground") || mesh.name === "Plane") {
+        console.log(
+          "Found ground mesh:",
+          mesh.name,
+          "at position:",
+          mesh.position
+        );
         groundMesh = mesh;
       }
 
@@ -182,7 +215,7 @@ export class ReelWorld {
 
       if (physicsAggregate.body.shape) {
         physicsAggregate.body.shape.filterMembershipMask = 2;
-        physicsAggregate.body.shape.filterCollideMask = 1;
+        physicsAggregate.body.shape.filterCollideMask = 1 | 8; // Collide with character (1) AND fish (8)
       }
 
       if (mesh.material) {
@@ -190,51 +223,59 @@ export class ReelWorld {
       }
     });
 
-    // Spawn fish
+    // Create ponds from water meshes and spawn fish in each pond
+    console.log("Water meshes found:", waterMeshes.length);
+    console.log("Ground mesh:", groundMesh ? groundMesh.name : "NOT FOUND");
+
     if (waterMeshes.length > 0 && groundMesh) {
-      const numFish = 5;
-      const groundY = groundMesh.position.y;
-      const underwaterPlanes = waterMeshes.filter(
-        (w) => w.position.y < groundY
+      // Don't filter by Y position - all water meshes are potential ponds
+      // The Pond class will handle calculating the intersection with ground
+      console.log(
+        "Creating ponds for all water meshes:",
+        waterMeshes.map((w) => w.name)
       );
 
-      if (underwaterPlanes.length > 0) {
-        let underwaterSurfaceY = -Infinity;
-        underwaterPlanes.forEach((waterMesh) => {
-          underwaterSurfaceY = Math.max(
-            underwaterSurfaceY,
-            waterMesh.position.y
+      // Create a pond for each water mesh (regardless of Y position)
+      for (const waterMesh of waterMeshes) {
+        console.log(`Creating pond for ${waterMesh.name}...`);
+        const pond = new Pond(waterMesh, groundMesh, this.scene);
+        this.ponds.push(pond);
+      }
+
+      // Spawn fish in all ponds after ponds are created
+      const numFishPerPond = 10; // Increased for better flocking behavior
+
+      for (const pond of this.ponds) {
+        console.log(`Spawning ${numFishPerPond} fish in pond...`);
+
+        // Get center position for spawning
+        const centerPos = pond.getCenterPosition();
+
+        for (let i = 0; i < numFishPerPond; i++) {
+          // Scatter fish around center position
+          const offset = new BABYLON.Vector3(
+            (Math.random() - 0.5) * 3,
+            (Math.random() - 0.5) * 1,
+            (Math.random() - 0.5) * 3
           );
-        });
+          const spawnPos = centerPos.add(offset);
 
-        let minX = Infinity,
-          maxX = -Infinity,
-          minZ = Infinity,
-          maxZ = -Infinity;
-        waterMeshes.forEach((waterMesh) => {
-          const bounds = waterMesh.getBoundingInfo().boundingBox;
-          minX = Math.min(minX, bounds.minimumWorld.x);
-          maxX = Math.max(maxX, bounds.maximumWorld.x);
-          minZ = Math.min(minZ, bounds.minimumWorld.z);
-          maxZ = Math.max(maxZ, bounds.maximumWorld.z);
-        });
-
-        for (let i = 0; i < numFish; i++) {
-          const x = minX + Math.random() * (maxX - minX);
-          const z = minZ + Math.random() * (maxZ - minZ);
-          const depth = 1 + Math.random() * 3;
-          const y = underwaterSurfaceY - depth;
-          const position = new BABYLON.Vector3(x, y, z);
-
-          const newFish = new Fish(
+          console.log(`  Fish ${i + 1} spawn position:`, spawnPos);
+          const newFish = await Fish.create(
             this.scene,
-            position,
-            waterMeshes,
-            groundMesh
+            spawnPos,
+            pond,
+            this.fish
           );
           this.fish.push(newFish);
         }
       }
+
+      console.log(
+        `Created ${this.ponds.length} ponds with ${this.fish.length} total fish`
+      );
+    } else {
+      console.log("Missing water meshes or ground mesh - cannot create ponds");
     }
   }
 
@@ -245,21 +286,41 @@ export class ReelWorld {
       spawnPosition,
       this.isMobile,
       this.camera,
-      this.level
+      this.level,
+      this.ponds
     );
     await this.reelGuy.load();
 
     // Create HUD
     this.hud = new HUD(this.isMobile, this.reelGuy);
 
-    // Update camera target
-    this.camera.setTarget(this.reelGuy.getModelPosition());
+    // Update camera target and position to face character from front
+    this.camera.setTarget(this.reelGuy.getPosition());
+    this.camera.setPosition(
+      new BABYLON.Vector3(
+        spawnPosition.x,
+        spawnPosition.y - 2,
+        spawnPosition.z + 10
+      )
+    );
   }
 
   animate = () => {
     const currentTime = performance.now();
     const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1);
     this.lastTime = currentTime;
+
+    // Log fish count once
+    if (this.frameCount === 60) {
+      console.log(`Fish in scene: ${this.fish.length}`);
+      this.fish.forEach((fish, i) => {
+        if (fish.mesh) {
+          console.log(
+            `  Fish ${i}: pos=${fish.mesh.position}, visible=${fish.mesh.isVisible}`
+          );
+        }
+      });
+    }
 
     if (this.hud && this.reelGuy) {
       const input = this.hud.getInput();

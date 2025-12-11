@@ -71,12 +71,13 @@ export class FishingRod {
 }
 
 export class ReelGuy {
-  constructor(scene, position, isMobile, camera, level) {
+  constructor(scene, position, isMobile, camera, level, ponds = []) {
     this.scene = scene;
     this.position = position;
     this.isMobile = isMobile;
     this.camera = camera;
     this.level = level;
+    this.ponds = ponds;
     this.model = null;
     this.physicsBody = null;
     this.bodyMesh = null;
@@ -85,6 +86,8 @@ export class ReelGuy {
     this.fishingRod = null;
     this.isFishing = false;
     this.currentAction = "idle";
+    this.waterBobTime = 0; // For sin wave bobbing in water
+    this.isInWater = false; // Track if currently in water
 
     // Movement state
     this.walkDirection = BABYLON.Vector3.Zero();
@@ -247,6 +250,58 @@ export class ReelGuy {
     return this.model.position;
   }
 
+  applyWaterPhysics(delta) {
+    if (!this.physicsBody || !this.ponds || this.ponds.length === 0) return;
+
+    const playerPos = this.bodyMesh.position;
+    let inWater = false;
+    let waterSurfaceY = 0;
+
+    // Check if player is in any pond
+    for (const pond of this.ponds) {
+      const inXZBounds =
+        playerPos.x >= pond.bounds.minX &&
+        playerPos.x <= pond.bounds.maxX &&
+        playerPos.z >= pond.bounds.minZ &&
+        playerPos.z <= pond.bounds.maxZ;
+
+      if (!inXZBounds) continue;
+
+      const depthInWater = pond.waterSurfaceY - playerPos.y;
+      if (depthInWater > -1 && depthInWater < 4) {
+        inWater = true;
+        waterSurfaceY = pond.waterSurfaceY;
+        break;
+      }
+    }
+
+    this.isInWater = inWater;
+
+    if (inWater) {
+      // Cartoony sin wave bobbing
+      this.waterBobTime += delta * 2; // Bob frequency
+      const bobAmount = Math.sin(this.waterBobTime) * 0.2; // Bob amplitude
+
+      // Set Y position to bob on water surface
+      const targetY = waterSurfaceY + 0.99 + bobAmount; // Float higher - waist at surface
+
+      // Smoothly move toward target Y
+      const currentY = this.bodyMesh.position.y;
+      const yDiff = targetY - currentY;
+      const moveSpeed = 5; // How fast to reach target
+
+      // Set velocity to move toward target
+      const velocity = this.physicsBody.getLinearVelocity();
+      velocity.y = yDiff * moveSpeed;
+      this.physicsBody.setLinearVelocity(velocity);
+
+      // Add water drag on horizontal movement
+      velocity.x *= 0.85;
+      velocity.z *= 0.85;
+      this.physicsBody.setLinearVelocity(velocity);
+    }
+  }
+
   update(delta, input) {
     const {
       directionPressed,
@@ -256,6 +311,9 @@ export class ReelGuy {
       jumpRequested,
       prevJumpRequested,
     } = input;
+
+    // Apply water buoyancy if in water
+    this.applyWaterPhysics(delta);
 
     // Handle jump
     if (jumpRequested && !prevJumpRequested && !this.isJumping) {
@@ -267,6 +325,17 @@ export class ReelGuy {
     // If fishing, keep fishing animation and don't allow movement
     if (this.isFishing) {
       play = "fishing";
+    } else if (this.isInWater) {
+      play = "swim"; // Always swim animation when in water
+      // Allow movement in water
+      if (directionPressed || joystickPressed) {
+        this.applyMovement(
+          directionPressed,
+          joystickPressed,
+          keysPressed,
+          joystick
+        );
+      }
     } else if (this.isStartingJump) {
       play = "jump";
     } else if (directionPressed || joystickPressed) {
