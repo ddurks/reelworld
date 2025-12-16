@@ -48,6 +48,40 @@ async function init() {
     };
 
     reelWorld.start();
+    
+    // Make debug functions globally available
+    window.showPhysicsDebug = () => reelWorld.showPhysicsDebug();
+    window.hidePhysicsDebug = () => reelWorld.hidePhysicsDebug();
+    window.debugLine = () => {
+      if (window.fishingLines && window.fishingLines.length > 0) {
+        const line = window.fishingLines[window.fishingLines.length - 1];
+        console.log("Latest fishing line:", line);
+        console.log("Is disposed:", line.isDisposed());
+        console.log("Is enabled:", line.isEnabled());
+        console.log("Position:", line.position);
+        console.log("Material:", line.material);
+        console.log("Visibility:", line.visibility);
+        console.log("In scene:", reelWorld.scene.meshes.includes(line));
+        
+        // Try to make it super visible
+        line.visibility = 1.0;
+        line.setEnabled(true);
+        line.isVisible = true;
+        line.renderingGroupId = 3; // Render on top
+        
+        if (!line.material) {
+          const mat = new BABYLON.StandardMaterial("debugLineMat", reelWorld.scene);
+          mat.diffuseColor = new BABYLON.Color3(1, 0, 1); // Magenta
+          mat.emissiveColor = new BABYLON.Color3(1, 0, 1);
+          line.material = mat;
+        }
+        
+        console.log("Line visibility forced. Check again!");
+      } else {
+        console.log("No fishing lines created yet");
+      }
+    };
+    console.log("Debug commands available: showPhysicsDebug(), hidePhysicsDebug(), debugLine()");
   } catch (err) {
     console.error("Initialization error:", err);
     console.error("Error stack:", err.stack);

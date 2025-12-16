@@ -137,13 +137,78 @@ export class ReelWorld {
     this.scene.enablePhysics(new BABYLON.Vector3(0, -100, 0), havokPlugin);
     this.physicsEngine = this.scene.getPhysicsEngine();
 
-    if (!this.isMobile) {
-      const physicsViewer = new BABYLON.PhysicsViewer(this.scene);
-      window.physicsViewer = physicsViewer;
-      console.log("Physics viewer ready (desktop only)");
-    } else {
-      console.log("Physics initialized (debug viewer disabled on mobile)");
+    // Enable physics viewer for debugging
+    this.physicsViewer = new BABYLON.PhysicsViewer(this.scene);
+    window.physicsViewer = this.physicsViewer;
+    console.log("Physics viewer ready - use window.showPhysicsDebug() to toggle");
+  }
+
+  showPhysicsDebug() {
+    if (!this.physicsViewer) {
+      console.log("Physics viewer not available");
+      return;
     }
+
+    console.log("Showing physics debug for all bodies...");
+    
+    // Show character physics
+    if (this.reelGuy && this.reelGuy.physicsBody) {
+      this.physicsViewer.showBody(this.reelGuy.physicsBody);
+      console.log("Character physics shown");
+    }
+
+    // Show bobber physics
+    if (this.reelGuy && this.reelGuy.fishingRod && this.reelGuy.fishingRod.bobberPhysics) {
+      this.physicsViewer.showBody(this.reelGuy.fishingRod.bobberPhysics.body);
+      console.log("Bobber physics shown");
+    }
+
+    // Show all fish physics
+    this.fish.forEach((fish, i) => {
+      if (fish.physicsAggregate) {
+        this.physicsViewer.showBody(fish.physicsAggregate.body);
+        console.log(`Fish ${i} physics shown`);
+      }
+    });
+
+    // Show ground physics
+    if (this.level && this.level.planeMeshes) {
+      this.level.planeMeshes.forEach((mesh, i) => {
+        if (mesh.physicsBody) {
+          this.physicsViewer.showBody(mesh.physicsBody);
+          console.log(`Ground mesh ${i} physics shown`);
+        }
+      });
+    }
+
+    // Show water physics
+    if (this.level && this.level.waterMeshes) {
+      this.level.waterMeshes.forEach((mesh, i) => {
+        if (mesh.physicsBody) {
+          this.physicsViewer.showBody(mesh.physicsBody);
+          console.log(`Water mesh ${i} physics shown`);
+        } else {
+          console.log(`Water mesh ${i} has no physicsBody`);
+        }
+      });
+    }
+    
+    // Show hand anchor physics if it exists
+    if (this.reelGuy && this.reelGuy.fishingRod && this.reelGuy.fishingRod.handAnchorPhysics) {
+      this.physicsViewer.showBody(this.reelGuy.fishingRod.handAnchorPhysics);
+      console.log("Hand anchor physics shown");
+    }
+
+    console.log("Physics debug view enabled");
+  }
+
+  hidePhysicsDebug() {
+    if (!this.physicsViewer) return;
+    
+    this.physicsViewer.dispose();
+    this.physicsViewer = new BABYLON.PhysicsViewer(this.scene);
+    window.physicsViewer = this.physicsViewer;
+    console.log("Physics debug view disabled");
   }
 
   async setupLevel() {
@@ -184,10 +249,13 @@ export class ReelWorld {
           this.scene
         );
 
+        // Store physics body on mesh for debug access
+        mesh.physicsBody = waterPhysics.body;
+
         if (waterPhysics.body.shape) {
-          // Water collides with fish (mask 8) but NOT character (mask 1)
+          // Water collides with fish (mask 8) and bobber (mask 16) but NOT character (mask 1)
           waterPhysics.body.shape.filterMembershipMask = 4;
-          waterPhysics.body.shape.filterCollideMask = 8;
+          waterPhysics.body.shape.filterCollideMask = 8 | 16; // Fish and bobber
         }
 
         if (mesh.material) {

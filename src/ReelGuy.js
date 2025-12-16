@@ -68,13 +68,15 @@ export class FishingRod {
       );
 
       this.bobber = result.meshes[0];
+      // Fix upside-down bobber by rotating 180 degrees around X axis
+      this.bobber.rotation = new BABYLON.Vector3(Math.PI, 0, 0);
       this.bobber.setEnabled(false);
 
-      // Add physics to bobber
+      // Add physics to bobber - smaller sphere
       this.bobberPhysics = new BABYLON.PhysicsAggregate(
         this.bobber,
         BABYLON.PhysicsShapeType.SPHERE,
-        { mass: 0.1, restitution: 0.3, friction: 0.5 },
+        { mass: 0.1, restitution: 0.3, friction: 0.5, radius: 0.25 },
         this.scene
       );
 
@@ -157,98 +159,282 @@ export class FishingRod {
     const actualVel = this.bobberPhysics.body.getLinearVelocity();
     console.log("Actual bobber velocity after set:", actualVel);
 
-    // Create fishing line
+    // Create fishing line and physics constraint
+    console.log("[CAST] About to create fishing line...");
     this.createLine();
+    
+    // Wait a frame for bobber to start moving, then create physics constraint
+    console.log("[CAST] Setting timeout for physics constraint...");
+    setTimeout(() => {
+      console.log("[CAST] Timeout triggered, creating physics line...");
+      this.createPhysicsLine();
+    }, 100);
+    
+    console.log("[CAST] createLine() completed. Hand anchor:", this.handAnchor);
 
     console.log("Fishing line cast!");
   }
 
   createLine() {
+    console.log("[CREATE_LINE] Starting createLine...");
     if (this.line) {
+      console.log("[CREATE_LINE] Disposing existing line:", this.line);
       this.line.dispose();
     }
-
-    // Create a thin tube for the fishing line
-    this.line = BABYLON.MeshBuilder.CreateTube(
-      "fishingLine",
-      {
-        path: [BABYLON.Vector3.Zero(), new BABYLON.Vector3(0, 1, 0)],
-        radius: 0.05, // Thicker line to see it better
-        updatable: true,
-      },
-      this.scene
-    );
-
-    // Create and store material for reuse
-    if (!this.lineMaterial) {
-      this.lineMaterial = new BABYLON.StandardMaterial("lineMat", this.scene);
-      this.lineMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1); // White
-      this.lineMaterial.emissiveColor = new BABYLON.Color3(0.5, 0.5, 0.5); // Glow
+    
+    if (this.lineConstraint) {
+      this.lineConstraint.dispose();
+      this.lineConstraint = null;
     }
-    this.line.material = this.lineMaterial;
 
-    console.log("Fishing line created:", this.line.isEnabled());
+    // Create anchor point at hand position for physics constraint
+    if (!this.handAnchor) {
+      this.handAnchor = BABYLON.MeshBuilder.CreateSphere(
+        "handAnchor",
+        { diameter: 0.3 },
+        this.scene
+      );
+      this.handAnchor.isVisible = true; // Visible for debugging
+      
+      // Create material for visibility
+      const anchorMat = new BABYLON.StandardMaterial("handAnchorMat", this.scene);
+      anchorMat.diffuseColor = new BABYLON.Color3(0, 1, 0); // Green
+      anchorMat.emissiveColor = new BABYLON.Color3(0, 1, 0);
+      this.handAnchor.material = anchorMat;
+      
+      // Create physics body for hand anchor
+      this.handAnchorPhysics = new BABYLON.PhysicsBody(
+        this.handAnchor,
+        BABYLON.PhysicsMotionType.ANIMATED, // Animated so we can move it
+        false,
+        this.scene
+      );
+      
+      const anchorShape = new BABYLON.PhysicsShapeBox(
+        new BABYLON.Vector3(0, 0, 0),
+        new BABYLON.Quaternion(0, 0, 0, 1),
+        new BABYLON.Vector3(0.1, 0.1, 0.1),
+        this.scene
+      );
+      this.handAnchorPhysics.shape = anchorShape;
+      this.handAnchorPhysics.setMassProperties({ mass: 0 }); // Infinite mass
+    }
+
+    // Position hand anchor at character's hand
+    const handPos = this.reelGuy.bodyMesh.position.clone();
+    handPos.y += 1.5;
+    this.handAnchor.position = handPos;
+
+    console.log("[CREATE_LINE] Hand anchor created at:", handPos);
+  }
+
+  createPhysicsLine() {
+    // Create a segmented rope with physics
+    if (!this.bobber || !this.handAnchor || !this.bobberPhysics || !this.handAnchorPhysics) {
+      console.log("[CREATE_PHYSICS_LINE] Missing required objects:", {
+        bobber: !!this.bobber,
+        handAnchor: !!this.handAnchor,
+        bobberPhysics: !!this.bobberPhysics,
+        handAnchorPhysics: !!this.handAnchorPhysics
+      });
+      return;
+    }
+
+    const handPos = this.handAnchor.position.clone();
+    const bobberPos = this.bobber.position.clone();
+    const distance = BABYLON.Vector3.Distance(handPos, bobberPos);
+    
+    console.log("[CREATE_PHYSICS_LINE] Creating segmented rope:");
+    console.log("  Total distance:", distance);
+    
+    // Create rope segments
+    const numSegments = 10;
+    const segmentLength = distance / numSegments;
+    
+    this.ropeSegments = [];
+    this.ropeConstraints = [];
+    
+    for (let i = 0; i < numSegments; i++) {
+      const t = (i + 1) / (numSegments + 1); // Skip first (hand) and last (bobber)
+      const pos = BABYLON.Vector3.Lerp(handPos, bobberPos, t);
+      
+      // Create small sphere for rope segment
+      const segment = BABYLON.MeshBuilder.CreateSphere(
+        `ropeSegment${i}`,
+        { diameter: 0.1 },
+        this.scene
+      );
+      segment.position = pos;
+      segment.isVisible = true; // Visible for debugging
+      
+      // Add physics
+      const segmentPhysics = new BABYLON.PhysicsAggregate(
+        segment,
+        BABYLON.PhysicsShapeType.SPHERE,
+        { mass: 0.05, restitution: 0, friction: 0.5 },
+        this.scene
+      );
+      
+      segmentPhysics.body.setLinearDamping(0.9); // High damping for stability
+      
+      // Store physics body on mesh for debug viewer
+      segment.physicsBody = segmentPhysics.body;
+      
+      // Set initial position on physics body to prevent origin issue
+      segmentPhysics.body.disablePreStep = false;
+      
+      this.ropeSegments.push({ mesh: segment, physics: segmentPhysics });
+    }
+    
+    // Connect segments with constraints
+    // Connect hand to first segment
+    if (this.ropeSegments.length > 0) {
+      const constraint = new BABYLON.Physics6DoFConstraint(
+        {
+          pivotA: new BABYLON.Vector3(0, 0, 0),
+          pivotB: new BABYLON.Vector3(0, 0, 0),
+          perpAxisA: new BABYLON.Vector3(0, 1, 0),
+          perpAxisB: new BABYLON.Vector3(0, 1, 0),
+        },
+        [
+          {
+            axis: BABYLON.PhysicsConstraintAxis.LINEAR_DISTANCE,
+            minLimit: 0,
+            maxLimit: segmentLength,
+          },
+        ],
+        this.scene
+      );
+      
+      this.handAnchorPhysics.addConstraint(this.ropeSegments[0].physics.body, constraint);
+      this.ropeConstraints.push(constraint);
+    }
+    
+    // Connect segments to each other
+    for (let i = 0; i < this.ropeSegments.length - 1; i++) {
+      const constraint = new BABYLON.Physics6DoFConstraint(
+        {
+          pivotA: new BABYLON.Vector3(0, 0, 0),
+          pivotB: new BABYLON.Vector3(0, 0, 0),
+          perpAxisA: new BABYLON.Vector3(0, 1, 0),
+          perpAxisB: new BABYLON.Vector3(0, 1, 0),
+        },
+        [
+          {
+            axis: BABYLON.PhysicsConstraintAxis.LINEAR_DISTANCE,
+            minLimit: 0,
+            maxLimit: segmentLength,
+          },
+        ],
+        this.scene
+      );
+      
+      this.ropeSegments[i].physics.body.addConstraint(
+        this.ropeSegments[i + 1].physics.body,
+        constraint
+      );
+      this.ropeConstraints.push(constraint);
+    }
+    
+    // Connect last segment to bobber
+    if (this.ropeSegments.length > 0) {
+      const lastSegment = this.ropeSegments[this.ropeSegments.length - 1];
+      const constraint = new BABYLON.Physics6DoFConstraint(
+        {
+          pivotA: new BABYLON.Vector3(0, 0, 0),
+          pivotB: new BABYLON.Vector3(0, 0, 0),
+          perpAxisA: new BABYLON.Vector3(0, 1, 0),
+          perpAxisB: new BABYLON.Vector3(0, 1, 0),
+        },
+        [
+          {
+            axis: BABYLON.PhysicsConstraintAxis.LINEAR_DISTANCE,
+            minLimit: 0,
+            maxLimit: segmentLength,
+          },
+        ],
+        this.scene
+      );
+      
+      lastSegment.physics.body.addConstraint(this.bobberPhysics.body, constraint);
+      this.ropeConstraints.push(constraint);
+    }
+    
+    console.log("[CREATE_PHYSICS_LINE] Created", this.ropeSegments.length, "rope segments");
   }
 
   updateLine() {
-    if (!this.bobber || !this.bobber.isEnabled() || !this.reelGuy)
+    if (!this.bobber || !this.bobber.isEnabled() || !this.reelGuy || !this.handAnchor) {
       return;
+    }
 
-    // Line starts from character's hand position
+    // Update hand anchor position to follow character's hand
     const handPos = this.reelGuy.bodyMesh.position.clone();
     handPos.y += 1.5; // Hand height
-
-    // Create catenary curve for realistic line sag
-    const bobberPos = this.bobber.position.clone();
+    this.handAnchor.position = handPos;
     
-    // Ensure we have valid positions
-    if (!bobberPos || !handPos) return;
-    
-    const segments = 20;
-    const path = [];
-    
-    const distance = BABYLON.Vector3.Distance(handPos, bobberPos);
-    const sagAmount = Math.min(distance * 0.15, 2); // Sag increases with distance, max 2 units
-    
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      // Manual linear interpolation to avoid any Babylon.js API issues
-      const point = new BABYLON.Vector3(
-        handPos.x + (bobberPos.x - handPos.x) * t,
-        handPos.y + (bobberPos.y - handPos.y) * t,
-        handPos.z + (bobberPos.z - handPos.z) * t
-      );
-      
-      // Add parabolic sag (gravity effect)
-      // Maximum sag at midpoint (t=0.5)
-      const sag = sagAmount * Math.sin(t * Math.PI);
-      point.y -= sag;
-      
-      path.push(point);
+    // For ANIMATED physics bodies, we need to enable pre-step to update position
+    if (this.handAnchorPhysics) {
+      this.handAnchorPhysics.disablePreStep = false;
     }
-    
-    // Ensure path has enough points
-    if (path.length < 2) return;
 
-    // Dispose old line and create new one (more reliable than instance update)
+    // Dispose old line
     if (this.line) {
       this.line.dispose();
     }
     
-    this.line = BABYLON.MeshBuilder.CreateTube(
+    // Build path from hand -> rope segments -> bobber
+    const path = [handPos];
+    
+    if (this.ropeSegments) {
+      for (const segment of this.ropeSegments) {
+        path.push(segment.mesh.position.clone());
+      }
+    }
+    
+    path.push(this.bobber.position.clone());
+    
+    // Create ribbon along the path with multiple segments for smooth curve
+    const ribbonPaths = [];
+    const width = 0.05;
+    
+    for (let i = 0; i < path.length; i++) {
+      const point = path[i];
+      // Create perpendicular offset for ribbon width
+      const offset = new BABYLON.Vector3(width, 0, 0);
+      ribbonPaths.push(point.clone().add(offset));
+    }
+    
+    const ribbonPaths2 = [];
+    for (let i = 0; i < path.length; i++) {
+      const point = path[i];
+      const offset = new BABYLON.Vector3(-width, 0, 0);
+      ribbonPaths2.push(point.clone().add(offset));
+    }
+    
+    this.line = BABYLON.MeshBuilder.CreateRibbon(
       "fishingLine",
       {
-        path: path,
-        radius: 0.05,
-        updatable: true,
+        pathArray: [ribbonPaths, ribbonPaths2],
+        sideOrientation: BABYLON.Mesh.DOUBLESIDE,
       },
       this.scene
     );
     
-    // Reuse stored material
-    if (this.lineMaterial) {
-      this.line.material = this.lineMaterial;
+    // Create bright material
+    if (!this.lineMaterial) {
+      this.lineMaterial = new BABYLON.StandardMaterial("lineMat", this.scene);
+      this.lineMaterial.diffuseColor = new BABYLON.Color3(1, 1, 0); // Yellow
+      this.lineMaterial.emissiveColor = new BABYLON.Color3(1, 1, 0); // Emissive yellow
+      this.lineMaterial.backFaceCulling = false;
     }
+    
+    this.line.material = this.lineMaterial;
+    this.line.position = BABYLON.Vector3.Zero();
+    this.line.isVisible = true;
+    this.line.setEnabled(true);
+    
+    console.log("[LINE] Ribbon created:", this.line, "vertices:", this.line.getTotalVertices());
   }
 
   reelIn() {
@@ -258,6 +444,21 @@ export class FishingRod {
     if (this.line) {
       this.line.dispose();
       this.line = null;
+    }
+    if (this.lineConstraint) {
+      this.lineConstraint.dispose();
+      this.lineConstraint = null;
+    }
+    if (this.ropeSegments) {
+      this.ropeSegments.forEach(segment => {
+        segment.mesh.dispose();
+        segment.physics.dispose();
+      });
+      this.ropeSegments = null;
+    }
+    if (this.ropeConstraints) {
+      this.ropeConstraints.forEach(c => c.dispose());
+      this.ropeConstraints = null;
     }
   }
 
