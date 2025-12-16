@@ -1,12 +1,16 @@
 export class FishingRod {
-  constructor(scene, skeleton, handBone, skinnedMesh) {
+  constructor(scene, skeleton, handBone, skinnedMesh, reelGuy) {
     this.scene = scene;
     this.skeleton = skeleton;
     this.handBone = handBone;
     this.skinnedMesh = skinnedMesh;
+    this.reelGuy = reelGuy; // Reference to parent ReelGuy
     this.meshes = null;
     this.rootMesh = null;
     this.isVisible = false;
+    this.bobber = null;
+    this.line = null;
+    this.rodTipPosition = null;
 
     this.loadModel();
   }
@@ -38,13 +42,260 @@ export class FishingRod {
         // Apply rotation and flip - mirror the model to make it right-handed
         this.rootMesh.rotation = new BABYLON.Vector3(Math.PI / 4, 0, 0);
         this.rootMesh.position = new BABYLON.Vector3(-0.15, 0, -0.1); // Offset slightly left
+
+        // Find the rod tip position (we'll update this each frame)
+        this.rodTipPosition = new BABYLON.Vector3(0, 0, 2); // 2 units forward from root
       }
+
+      // Load bobber model
+      await this.loadBobber();
 
       // Initially hide all fishing rod meshes
       this.hide();
       console.log("Fishing rod loaded successfully");
     } catch (err) {
       console.error("Failed to load fishing rod:", err);
+    }
+  }
+
+  async loadBobber() {
+    try {
+      const result = await BABYLON.SceneLoader.ImportMeshAsync(
+        "",
+        "./assets/",
+        "bobber.glb",
+        this.scene
+      );
+
+      this.bobber = result.meshes[0];
+      this.bobber.setEnabled(false);
+
+      // Add physics to bobber
+      this.bobberPhysics = new BABYLON.PhysicsAggregate(
+        this.bobber,
+        BABYLON.PhysicsShapeType.SPHERE,
+        { mass: 0.1, restitution: 0.3, friction: 0.5 },
+        this.scene
+      );
+
+      // Keep normal gravity for bobber
+      this.bobberPhysics.body.setGravityFactor(1);
+
+      // Lock rotation to keep bobber upright
+      this.bobberPhysics.body.setMassProperties({
+        inertia: new BABYLON.Vector3(0, 0, 0), // No rotation allowed
+      });
+      this.bobberPhysics.body.setAngularDamping(1.0);
+
+      // Set collision - bobber collides with EVERYTHING
+      if (this.bobberPhysics.body.shape) {
+        this.bobberPhysics.body.shape.filterMembershipMask = 16; // Bobber mask
+        this.bobberPhysics.body.shape.filterCollideMask = 0xffffffff; // Collide with everything
+      }
+
+      console.log(
+        "Bobber loaded with collision mask:",
+        this.bobberPhysics.body.shape.filterCollideMask
+      );
+      console.log(
+        "Bobber membership mask:",
+        this.bobberPhysics.body.shape.filterMembershipMask
+      );
+
+      console.log("Bobber loaded");
+    } catch (err) {
+      console.error("Failed to load bobber:", err);
+    }
+  }
+
+  castLine(ponds) {
+    if (!this.bobber || !this.rootMesh || !this.reelGuy) return;
+
+    // Get character position
+    const charPos = this.reelGuy.bodyMesh.position;
+
+    // Get camera forward direction (more predictable than character rotation)
+    const cameraForward = this.reelGuy.camera.getForwardRay().direction;
+    const castDirection = new BABYLON.Vector3(
+      cameraForward.x,
+      0,
+      cameraForward.z
+    );
+    castDirection.normalize();
+
+    // Start bobber in front of character, at hand height
+    const startPos = charPos.clone();
+    startPos.y += 1.5; // Hand height
+    startPos.addInPlace(castDirection.scale(2)); // 2 units forward to clear player
+
+    console.log("Casting from:", startPos);
+    console.log("Character pos:", charPos);
+    console.log("Cast direction:", castDirection);
+
+    // Enable and position bobber
+    this.bobber.setEnabled(true);
+    this.bobber.position = startPos.clone();
+
+    // CRITICAL: Sync physics body with mesh position
+    this.bobberPhysics.body.disablePreStep = false;
+    this.bobberPhysics.transformNode.position = startPos.clone();
+
+    // Cast forward and up with more horizontal energy
+    const castVelocity = castDirection.scale(18);
+    castVelocity.y = 4; // Arc upward
+
+    console.log("Cast velocity:", castVelocity);
+    console.log("Bobber mesh pos after set:", this.bobber.position);
+    console.log(
+      "Bobber physics pos:",
+      this.bobberPhysics.transformNode.position
+    );
+
+    this.bobberPhysics.body.setLinearVelocity(castVelocity);
+
+    // Verify velocity was set
+    const actualVel = this.bobberPhysics.body.getLinearVelocity();
+    console.log("Actual bobber velocity after set:", actualVel);
+
+    // Create fishing line
+    this.createLine();
+
+    console.log("Fishing line cast!");
+  }
+
+  createLine() {
+    if (this.line) {
+      this.line.dispose();
+    }
+
+    // Create a thin tube for the fishing line
+    this.line = BABYLON.MeshBuilder.CreateTube(
+      "fishingLine",
+      {
+        path: [BABYLON.Vector3.Zero(), new BABYLON.Vector3(0, 1, 0)],
+        radius: 0.05, // Thicker line to see it better
+        updatable: true,
+      },
+      this.scene
+    );
+
+    // Create and store material for reuse
+    if (!this.lineMaterial) {
+      this.lineMaterial = new BABYLON.StandardMaterial("lineMat", this.scene);
+      this.lineMaterial.diffuseColor = new BABYLON.Color3(1, 1, 1); // White
+      this.lineMaterial.emissiveColor = new BABYLON.Color3(0.5, 0.5, 0.5); // Glow
+    }
+    this.line.material = this.lineMaterial;
+
+    console.log("Fishing line created:", this.line.isEnabled());
+  }
+
+  updateLine() {
+    if (!this.bobber || !this.bobber.isEnabled() || !this.reelGuy)
+      return;
+
+    // Line starts from character's hand position
+    const handPos = this.reelGuy.bodyMesh.position.clone();
+    handPos.y += 1.5; // Hand height
+
+    // Create catenary curve for realistic line sag
+    const bobberPos = this.bobber.position.clone();
+    
+    // Ensure we have valid positions
+    if (!bobberPos || !handPos) return;
+    
+    const segments = 20;
+    const path = [];
+    
+    const distance = BABYLON.Vector3.Distance(handPos, bobberPos);
+    const sagAmount = Math.min(distance * 0.15, 2); // Sag increases with distance, max 2 units
+    
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      // Manual linear interpolation to avoid any Babylon.js API issues
+      const point = new BABYLON.Vector3(
+        handPos.x + (bobberPos.x - handPos.x) * t,
+        handPos.y + (bobberPos.y - handPos.y) * t,
+        handPos.z + (bobberPos.z - handPos.z) * t
+      );
+      
+      // Add parabolic sag (gravity effect)
+      // Maximum sag at midpoint (t=0.5)
+      const sag = sagAmount * Math.sin(t * Math.PI);
+      point.y -= sag;
+      
+      path.push(point);
+    }
+    
+    // Ensure path has enough points
+    if (path.length < 2) return;
+
+    // Dispose old line and create new one (more reliable than instance update)
+    if (this.line) {
+      this.line.dispose();
+    }
+    
+    this.line = BABYLON.MeshBuilder.CreateTube(
+      "fishingLine",
+      {
+        path: path,
+        radius: 0.05,
+        updatable: true,
+      },
+      this.scene
+    );
+    
+    // Reuse stored material
+    if (this.lineMaterial) {
+      this.line.material = this.lineMaterial;
+    }
+  }
+
+  reelIn() {
+    if (this.bobber) {
+      this.bobber.setEnabled(false);
+    }
+    if (this.line) {
+      this.line.dispose();
+      this.line = null;
+    }
+  }
+
+  update(ponds) {
+    // Update line position if cast
+    this.updateLine();
+
+    // Make bobber float on water and log position
+    if (this.bobber && this.bobber.isEnabled() && ponds && ponds.length > 0) {
+      const bobberPos = this.bobber.position;
+      const bobberVel = this.bobberPhysics.body.getLinearVelocity();
+
+      // Log occasionally
+      if (Math.random() < 0.05) {
+        console.log("Bobber state:", {
+          pos: bobberPos,
+          vel: bobberVel,
+          speed: bobberVel.length().toFixed(2),
+        });
+      }
+
+      // Check if bobber is in water
+      for (const pond of ponds) {
+        // Apply buoyancy when below water surface
+        if (bobberPos.y < pond.waterSurfaceY) {
+          const depthBelowSurface = pond.waterSurfaceY - bobberPos.y;
+          // Gentle buoyancy force - just enough to counteract gravity
+          const buoyancy = new BABYLON.Vector3(0, 3 + depthBelowSurface * 5, 0);
+          this.bobberPhysics.body.applyForce(buoyancy, bobberPos);
+
+          // Dampen movement in water
+          const vel = this.bobberPhysics.body.getLinearVelocity();
+          vel.x *= 0.9;
+          vel.z *= 0.9;
+          vel.y *= 0.95; // Also dampen vertical movement
+          this.bobberPhysics.body.setLinearVelocity(vel);
+        }
+      }
     }
   }
 
@@ -195,7 +446,8 @@ export class ReelGuy {
           this.scene,
           this.skeleton,
           handBone,
-          skinnedMesh
+          skinnedMesh,
+          this // Pass ReelGuy reference
         );
       }
     }
@@ -213,6 +465,13 @@ export class ReelGuy {
       console.log("Entering fishing mode");
       this.fishingRod.show();
 
+      // Cast fishing line after a short delay
+      setTimeout(() => {
+        if (this.fishingRod) {
+          this.fishingRod.castLine(this.ponds);
+        }
+      }, 500);
+
       // Play fishing animation
       const fishingAnim = this.animationsMap.get("fishing");
       if (fishingAnim) {
@@ -229,6 +488,7 @@ export class ReelGuy {
     } else {
       console.log("Exiting fishing mode");
       this.fishingRod.hide();
+      this.fishingRod.reelIn();
 
       // Return to idle animation
       const fishingAnim = this.animationsMap.get("fishing");
@@ -311,6 +571,11 @@ export class ReelGuy {
       jumpRequested,
       prevJumpRequested,
     } = input;
+
+    // Update fishing rod (line, bobber, etc.)
+    if (this.fishingRod) {
+      this.fishingRod.update(this.ponds);
+    }
 
     // Apply water buoyancy if in water
     this.applyWaterPhysics(delta);

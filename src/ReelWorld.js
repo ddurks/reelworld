@@ -215,7 +215,7 @@ export class ReelWorld {
 
       if (physicsAggregate.body.shape) {
         physicsAggregate.body.shape.filterMembershipMask = 2;
-        physicsAggregate.body.shape.filterCollideMask = 1 | 8; // Collide with character (1) AND fish (8)
+        physicsAggregate.body.shape.filterCollideMask = 1 | 8 | 16; // Collide with character (1), fish (8), and bobber (16)
       }
 
       if (mesh.material) {
