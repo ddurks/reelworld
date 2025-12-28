@@ -22,9 +22,6 @@ export class ReelWorld {
   }
 
   async init() {
-    console.log("Starting ReelWorld initialization...");
-
-    // Create engine
     const engineOptions = {
       preserveDrawingBuffer: false,
       stencil: true,
@@ -34,14 +31,11 @@ export class ReelWorld {
 
     try {
       this.engine = new BABYLON.Engine(this.canvas, true, engineOptions, false);
-      console.log("Engine created successfully");
-      console.log("WebGL version:", this.engine.webGLVersion);
     } catch (err) {
       console.error("Failed to create engine:", err);
       throw err;
     }
 
-    // Handle WebGL context loss
     this.canvas.addEventListener(
       "webglcontextlost",
       (event) => {
@@ -53,19 +47,12 @@ export class ReelWorld {
 
     this.canvas.addEventListener(
       "webglcontextrestored",
-      () => {
-        console.log("WebGL context restored. Reloading page...");
-        window.location.reload();
-      },
+      () => window.location.reload(),
       false
     );
 
-    // Create scene
-    console.log("Creating scene...");
     this.scene = new BABYLON.Scene(this.engine);
-    console.log("Scene created");
 
-    // Simple light for testing
     const light = new BABYLON.HemisphericLight(
       "light",
       new BABYLON.Vector3(0, 1, 0),
@@ -73,7 +60,6 @@ export class ReelWorld {
     );
     light.intensity = 0.7;
 
-    // Environment texture (HDRI)
     if (!this.isMobile) {
       try {
         const hdrTexture = new BABYLON.HDRCubeTexture(
@@ -92,13 +78,11 @@ export class ReelWorld {
       }
     } else {
       this.scene.clearColor = new BABYLON.Color4(0.53, 0.81, 0.92, 1.0);
-      console.log("Using simple background for mobile");
     }
 
-    // Camera - positioned to look at character from the front
     this.camera = new BABYLON.ArcRotateCamera(
       "camera",
-      Math.PI, // Alpha: 180 degrees (looking from the front)
+      Math.PI,
       Math.PI / 3,
       10,
       BABYLON.Vector3.Zero(),
@@ -113,22 +97,9 @@ export class ReelWorld {
     this.camera.angularSensibilityX = 1000;
     this.camera.angularSensibilityY = 1000;
 
-    // Initialize physics
-    console.log("Initializing physics...");
     await this.initPhysics();
-    console.log("Physics initialized");
-
-    // Setup level
-    console.log("Setting up level...");
     await this.setupLevel();
-    console.log("Level loaded");
-
-    // Load character
-    console.log("Loading character...");
     await this.loadCharacter();
-    console.log("Character loaded");
-
-    console.log("ReelWorld initialization complete!");
   }
 
   async initPhysics() {
@@ -137,69 +108,46 @@ export class ReelWorld {
     this.scene.enablePhysics(new BABYLON.Vector3(0, -100, 0), havokPlugin);
     this.physicsEngine = this.scene.getPhysicsEngine();
 
-    // Enable physics viewer for debugging
     this.physicsViewer = new BABYLON.PhysicsViewer(this.scene);
     window.physicsViewer = this.physicsViewer;
-    console.log("Physics viewer ready - use window.showPhysicsDebug() to toggle");
   }
 
   showPhysicsDebug() {
-    if (!this.physicsViewer) {
-      console.log("Physics viewer not available");
-      return;
-    }
-
-    console.log("Showing physics debug for all bodies...");
+    if (!this.physicsViewer) return;
     
-    // Show character physics
-    if (this.reelGuy && this.reelGuy.physicsBody) {
+    if (this.reelGuy?.physicsBody) {
       this.physicsViewer.showBody(this.reelGuy.physicsBody);
-      console.log("Character physics shown");
     }
 
-    // Show bobber physics
-    if (this.reelGuy && this.reelGuy.fishingRod && this.reelGuy.fishingRod.bobberPhysics) {
+    if (this.reelGuy?.fishingRod?.bobberPhysics) {
       this.physicsViewer.showBody(this.reelGuy.fishingRod.bobberPhysics.body);
-      console.log("Bobber physics shown");
     }
 
-    // Show all fish physics
-    this.fish.forEach((fish, i) => {
+    this.fish.forEach((fish) => {
       if (fish.physicsAggregate) {
         this.physicsViewer.showBody(fish.physicsAggregate.body);
-        console.log(`Fish ${i} physics shown`);
       }
     });
 
-    // Show ground physics
-    if (this.level && this.level.planeMeshes) {
-      this.level.planeMeshes.forEach((mesh, i) => {
+    if (this.level?.planeMeshes) {
+      this.level.planeMeshes.forEach((mesh) => {
         if (mesh.physicsBody) {
           this.physicsViewer.showBody(mesh.physicsBody);
-          console.log(`Ground mesh ${i} physics shown`);
         }
       });
     }
 
-    // Show water physics
-    if (this.level && this.level.waterMeshes) {
-      this.level.waterMeshes.forEach((mesh, i) => {
+    if (this.level?.waterMeshes) {
+      this.level.waterMeshes.forEach((mesh) => {
         if (mesh.physicsBody) {
           this.physicsViewer.showBody(mesh.physicsBody);
-          console.log(`Water mesh ${i} physics shown`);
-        } else {
-          console.log(`Water mesh ${i} has no physicsBody`);
         }
       });
     }
     
-    // Show hand anchor physics if it exists
-    if (this.reelGuy && this.reelGuy.fishingRod && this.reelGuy.fishingRod.handAnchorPhysics) {
+    if (this.reelGuy?.fishingRod?.handAnchorPhysics) {
       this.physicsViewer.showBody(this.reelGuy.fishingRod.handAnchorPhysics);
-      console.log("Hand anchor physics shown");
     }
-
-    console.log("Physics debug view enabled");
   }
 
   hidePhysicsDebug() {
@@ -208,7 +156,6 @@ export class ReelWorld {
     this.physicsViewer.dispose();
     this.physicsViewer = new BABYLON.PhysicsViewer(this.scene);
     window.physicsViewer = this.physicsViewer;
-    console.log("Physics debug view disabled");
   }
 
   async setupLevel() {
@@ -233,15 +180,8 @@ export class ReelWorld {
       }
 
       if (mesh.name === "water" || mesh.name === "water.001") {
-        console.log(
-          "Found water mesh:",
-          mesh.name,
-          "at position:",
-          mesh.position
-        );
         waterMeshes.push(mesh);
 
-        // Add physics to water but with special collision filters
         const waterPhysics = new BABYLON.PhysicsAggregate(
           mesh,
           BABYLON.PhysicsShapeType.MESH,
@@ -249,13 +189,11 @@ export class ReelWorld {
           this.scene
         );
 
-        // Store physics body on mesh for debug access
         mesh.physicsBody = waterPhysics.body;
 
         if (waterPhysics.body.shape) {
-          // Water collides with fish (mask 8) and bobber (mask 16) but NOT character (mask 1)
           waterPhysics.body.shape.filterMembershipMask = 4;
-          waterPhysics.body.shape.filterCollideMask = 8 | 16; // Fish and bobber
+          waterPhysics.body.shape.filterCollideMask = 8 | 16;
         }
 
         if (mesh.material) {
@@ -265,12 +203,6 @@ export class ReelWorld {
       }
 
       if (mesh.name.toLowerCase().includes("ground") || mesh.name === "Plane") {
-        console.log(
-          "Found ground mesh:",
-          mesh.name,
-          "at position:",
-          mesh.position
-        );
         groundMesh = mesh;
       }
 
@@ -283,7 +215,7 @@ export class ReelWorld {
 
       if (physicsAggregate.body.shape) {
         physicsAggregate.body.shape.filterMembershipMask = 2;
-        physicsAggregate.body.shape.filterCollideMask = 1 | 8 | 16; // Collide with character (1), fish (8), and bobber (16)
+        physicsAggregate.body.shape.filterCollideMask = 1 | 8 | 16;
       }
 
       if (mesh.material) {
@@ -291,36 +223,18 @@ export class ReelWorld {
       }
     });
 
-    // Create ponds from water meshes and spawn fish in each pond
-    console.log("Water meshes found:", waterMeshes.length);
-    console.log("Ground mesh:", groundMesh ? groundMesh.name : "NOT FOUND");
-
     if (waterMeshes.length > 0 && groundMesh) {
-      // Don't filter by Y position - all water meshes are potential ponds
-      // The Pond class will handle calculating the intersection with ground
-      console.log(
-        "Creating ponds for all water meshes:",
-        waterMeshes.map((w) => w.name)
-      );
-
-      // Create a pond for each water mesh (regardless of Y position)
       for (const waterMesh of waterMeshes) {
-        console.log(`Creating pond for ${waterMesh.name}...`);
         const pond = new Pond(waterMesh, groundMesh, this.scene);
         this.ponds.push(pond);
       }
 
-      // Spawn fish in all ponds after ponds are created
-      const numFishPerPond = 10; // Increased for better flocking behavior
+      const numFishPerPond = 10;
 
       for (const pond of this.ponds) {
-        console.log(`Spawning ${numFishPerPond} fish in pond...`);
-
-        // Get center position for spawning
         const centerPos = pond.getCenterPosition();
 
         for (let i = 0; i < numFishPerPond; i++) {
-          // Scatter fish around center position
           const offset = new BABYLON.Vector3(
             (Math.random() - 0.5) * 3,
             (Math.random() - 0.5) * 1,
@@ -328,7 +242,6 @@ export class ReelWorld {
           );
           const spawnPos = centerPos.add(offset);
 
-          console.log(`  Fish ${i + 1} spawn position:`, spawnPos);
           const newFish = await Fish.create(
             this.scene,
             spawnPos,
@@ -338,12 +251,6 @@ export class ReelWorld {
           this.fish.push(newFish);
         }
       }
-
-      console.log(
-        `Created ${this.ponds.length} ponds with ${this.fish.length} total fish`
-      );
-    } else {
-      console.log("Missing water meshes or ground mesh - cannot create ponds");
     }
   }
 
@@ -359,10 +266,8 @@ export class ReelWorld {
     );
     await this.reelGuy.load();
 
-    // Create HUD
     this.hud = new HUD(this.isMobile, this.reelGuy);
 
-    // Update camera target and position to face character from front
     this.camera.setTarget(this.reelGuy.getPosition());
     this.camera.setPosition(
       new BABYLON.Vector3(
@@ -377,18 +282,6 @@ export class ReelWorld {
     const currentTime = performance.now();
     const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1);
     this.lastTime = currentTime;
-
-    // Log fish count once
-    if (this.frameCount === 60) {
-      console.log(`Fish in scene: ${this.fish.length}`);
-      this.fish.forEach((fish, i) => {
-        if (fish.mesh) {
-          console.log(
-            `  Fish ${i}: pos=${fish.mesh.position}, visible=${fish.mesh.isVisible}`
-          );
-        }
-      });
-    }
 
     if (this.hud && this.reelGuy) {
       const input = this.hud.getInput();
@@ -415,9 +308,7 @@ export class ReelWorld {
   }
 
   start() {
-    console.log("Starting render loop...");
     this.engine.runRenderLoop(this.animate);
-    console.log("Render loop started");
   }
 
   handleResize = () => {

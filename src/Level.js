@@ -12,7 +12,6 @@ export class Level {
   }
 
   light() {
-    // Warm sunlight (Directional Light)
     this.sunLight = new BABYLON.DirectionalLight(
       "sunLight",
       new BABYLON.Vector3(-60, -100, -100),
@@ -21,7 +20,6 @@ export class Level {
     this.sunLight.intensity = 0.7;
     this.sunLight.diffuse = new BABYLON.Color3(1, 1, 1);
 
-    // Shadows
     if (!this.isMobile) {
       this.shadowGenerator = new BABYLON.ShadowGenerator(4096, this.sunLight);
       this.shadowGenerator.useBlurExponentialShadowMap = true;
@@ -29,7 +27,6 @@ export class Level {
       this.shadowGenerator.bias = 0.0001;
     }
 
-    // Cool Ambient Light for Snow Contrast
     const ambientLight = new BABYLON.HemisphericLight(
       "ambientLight",
       new BABYLON.Vector3(0, 1, 0),

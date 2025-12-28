@@ -132,7 +132,6 @@ export class ReelSpinnaControls {
     this.currentButton = button;
     this.buttonPressed = true;
     this.buttonJustPressed = true;
-    console.log("ReelSpinna button pressed:", button);
 
     const rect = this.container.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
@@ -181,7 +180,6 @@ export class ReelSpinnaControls {
   }
 
   update(deltaTime) {
-    // Reset buttonJustPressed after frame
     this.buttonJustPressed = false;
   }
 }
@@ -237,15 +235,10 @@ export class HUD {
 
     const jumpRequested = this.keysPressed[SPACE] || this.aPressed;
 
-    // Handle ReelSpinna button press
-    if (this.reelSpinnaControls && this.reelSpinnaControls.buttonJustPressed) {
-      console.log("Button press detected in HUD, toggling fishing mode");
-      if (this.reelGuy) {
-        this.reelGuy.toggleFishingMode();
-      }
+    if (this.reelSpinnaControls?.buttonJustPressed && this.reelGuy) {
+      this.reelGuy.toggleFishingMode();
     }
 
-    // Update ReelSpinna
     if (this.reelSpinnaControls) {
       this.reelSpinnaControls.update(0);
     }
