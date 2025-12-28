@@ -72,9 +72,10 @@ export class Fish {
       }
 
       if (result.animationGroups && result.animationGroups.length > 0) {
-        this.animationGroup = result.animationGroups.find((ag) =>
-          ag.name.toLowerCase().includes("swim")
-        ) || result.animationGroups[0];
+        this.animationGroup =
+          result.animationGroups.find((ag) =>
+            ag.name.toLowerCase().includes("swim")
+          ) || result.animationGroups[0];
 
         if (this.animationGroup) {
           this.animationGroup.start(true);

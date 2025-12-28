@@ -114,7 +114,7 @@ export class ReelWorld {
 
   showPhysicsDebug() {
     if (!this.physicsViewer) return;
-    
+
     if (this.reelGuy?.physicsBody) {
       this.physicsViewer.showBody(this.reelGuy.physicsBody);
     }
@@ -144,7 +144,7 @@ export class ReelWorld {
         }
       });
     }
-    
+
     if (this.reelGuy?.fishingRod?.handAnchorPhysics) {
       this.physicsViewer.showBody(this.reelGuy.fishingRod.handAnchorPhysics);
     }
@@ -152,7 +152,7 @@ export class ReelWorld {
 
   hidePhysicsDebug() {
     if (!this.physicsViewer) return;
-    
+
     this.physicsViewer.dispose();
     this.physicsViewer = new BABYLON.PhysicsViewer(this.scene);
     window.physicsViewer = this.physicsViewer;
