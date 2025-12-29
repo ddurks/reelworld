@@ -26,6 +26,14 @@ export class ReelGuy {
 
     this.isJumping = false;
     this.isStartingJump = false;
+
+    this.currentExpression = "normal";
+    this.lastBlinkTime = 0;
+    this.nextBlinkDelay = this.getRandomBlinkDelay();
+  }
+
+  getRandomBlinkDelay() {
+    return 2000 + Math.random() * 4000;
   }
 
   async load() {
@@ -43,6 +51,45 @@ export class ReelGuy {
         mesh.receiveShadows = true;
       }
     });
+
+    this.faceMesh = result.meshes.find((m) =>
+      m.name.toLowerCase().includes("face")
+    );
+
+    if (this.faceMesh && this.faceMesh.material) {
+      this.faceTextures = {
+        normal: new BABYLON.Texture(
+          "./assets/faces/fisherman_faces-1.png",
+          this.scene
+        ),
+        happy: new BABYLON.Texture(
+          "./assets/faces/fisherman_faces-2.png",
+          this.scene
+        ),
+        eyesClosed: new BABYLON.Texture(
+          "./assets/faces/fisherman_faces-3.png",
+          this.scene
+        ),
+        bored: new BABYLON.Texture(
+          "./assets/faces/fisherman_faces-4.png",
+          this.scene
+        ),
+        scared: new BABYLON.Texture(
+          "./assets/faces/fisherman_faces-5.png",
+          this.scene
+        ),
+        sad: new BABYLON.Texture(
+          "./assets/faces/fisherman_faces-6.png",
+          this.scene
+        ),
+      };
+
+      Object.values(this.faceTextures).forEach((texture) => {
+        texture.vScale = -1;
+      });
+
+      this.currentExpression = "normal";
+    }
 
     this.bodyMesh = BABYLON.MeshBuilder.CreateCylinder(
       "characterBody",
@@ -122,6 +169,33 @@ export class ReelGuy {
     }
 
     return this;
+  }
+
+  setFaceExpression(expression) {
+    if (!this.faceMesh || !this.faceTextures || !this.faceMesh.material) return;
+
+    const texture = this.faceTextures[expression];
+    if (texture) {
+      if (this.faceMesh.material.albedoTexture) {
+        this.faceMesh.material.albedoTexture = texture;
+      } else if (this.faceMesh.material.diffuseTexture) {
+        this.faceMesh.material.diffuseTexture = texture;
+      } else if (this.faceMesh.material.emissiveTexture) {
+        this.faceMesh.material.emissiveTexture = texture;
+      }
+      this.currentExpression = expression;
+    }
+  }
+
+  blink() {
+    if (!this.faceMesh || !this.faceTextures) return;
+
+    const previousExpression = this.currentExpression;
+    this.setFaceExpression("eyesClosed");
+
+    setTimeout(() => {
+      this.setFaceExpression(previousExpression);
+    }, 150);
   }
 
   toggleFishingMode() {
@@ -225,6 +299,13 @@ export class ReelGuy {
     }
 
     this.applyWaterPhysics(delta);
+
+    const currentTime = Date.now();
+    if (currentTime - this.lastBlinkTime > this.nextBlinkDelay) {
+      this.blink();
+      this.lastBlinkTime = currentTime;
+      this.nextBlinkDelay = this.getRandomBlinkDelay();
+    }
 
     if (jumpRequested && !prevJumpRequested && !this.isJumping) {
       this.isStartingJump = true;
