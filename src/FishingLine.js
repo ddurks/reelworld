@@ -34,8 +34,6 @@ export class FishingLine {
     );
     this.rodTipAnchorPhysics.shape = anchorShape;
     this.rodTipAnchorPhysics.setMassProperties({ mass: 0 });
-
-    console.log("[FISHING_LINE] Anchor created");
   }
 
   setAnchorPosition(position) {
@@ -44,10 +42,8 @@ export class FishingLine {
   }
 
   createPhysicsRope(rodTipPos, bobberPos, bobberPhysics) {
-    if (!this.rodTipAnchor || !this.rodTipAnchorPhysics || !bobberPhysics) {
-      console.warn("[FISHING_LINE] Missing required objects for physics rope");
+    if (!this.rodTipAnchor || !this.rodTipAnchorPhysics || !bobberPhysics)
       return;
-    }
 
     const distance = BABYLON.Vector3.Distance(rodTipPos, bobberPos);
     const numSegments = 10;
@@ -62,7 +58,7 @@ export class FishingLine {
 
       const segment = BABYLON.MeshBuilder.CreateSphere(
         `ropeSegment${i}`,
-        { diameter: 0.1 },
+        { diameter: 0.03 },
         this.scene
       );
       segment.position = pos;
@@ -154,7 +150,7 @@ export class FishingLine {
       "fishingLine",
       {
         path: path,
-        radius: 0.02,
+        radius: 0.05,
         tessellation: 8,
         cap: BABYLON.Mesh.CAP_ALL,
         updatable: false,
@@ -170,6 +166,7 @@ export class FishingLine {
     }
 
     this.line.material = this.lineMaterial;
+    this.line.isVisible = true;
   }
 
   dispose() {

@@ -130,7 +130,7 @@ export class ReelGuy {
     this.isFishing = !this.isFishing;
 
     if (this.isFishing) {
-      this.fishingRod.show();
+      this.fishingRod.show(this.ponds);
 
       setTimeout(() => {
         if (this.fishingRod) {

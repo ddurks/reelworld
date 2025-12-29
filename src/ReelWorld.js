@@ -250,6 +250,9 @@ export class ReelWorld {
           );
           this.fish.push(newFish);
         }
+
+        // Update water render list to include newly spawned fish
+        pond.updateWaterRenderList();
       }
     }
   }
@@ -267,6 +270,9 @@ export class ReelWorld {
     await this.reelGuy.load();
 
     this.hud = new HUD(this.isMobile, this.reelGuy);
+
+    // Update water render lists to include player, bobber, and fishing rod meshes
+    this.ponds.forEach((pond) => pond.updateWaterRenderList());
 
     this.camera.setTarget(this.reelGuy.getPosition());
     this.camera.setPosition(

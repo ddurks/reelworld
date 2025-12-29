@@ -123,6 +123,8 @@ export class FishingRod {
       this.fishingLine.setAnchorPosition(rodTipPos);
     }
 
+    ponds.forEach((pond) => pond.updateWaterRenderList());
+
     setTimeout(() => {
       const rodTipPos = this.getRodTipWorldPosition();
       if (rodTipPos) {
@@ -180,10 +182,15 @@ export class FishingRod {
     }
   }
 
-  show() {
+  show(ponds) {
     if (this.meshes) {
       this.meshes.forEach((mesh) => mesh.setEnabled(true));
       this.isVisible = true;
+
+      // Update water render lists to include rod meshes
+      if (ponds) {
+        ponds.forEach((pond) => pond.updateWaterRenderList());
+      }
     }
   }
 
