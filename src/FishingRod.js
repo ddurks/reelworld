@@ -14,6 +14,7 @@ export class FishingRod {
     this.bobberPhysics = null;
     this.fishingLine = new FishingLine(scene);
     this.rodTipPosition = null;
+    this.bobberInWater = false;
 
     this.loadModel();
   }
@@ -152,6 +153,7 @@ export class FishingRod {
     if (this.bobber) {
       this.bobber.setEnabled(false);
     }
+    this.bobberInWater = false;
     this.fishingLine.dispose();
   }
 
@@ -164,20 +166,34 @@ export class FishingRod {
     if (!this.bobber || !this.bobber.isEnabled() || !ponds?.length) return;
 
     const bobberPos = this.bobber.position;
+    const surfaceProximity = 2;
+    const impactVelocityThreshold = -2;
+    const buoyancyForce = 15;
+    const horizontalDamping = 0.92;
+    const verticalDamping = 0.7;
 
     for (const pond of ponds) {
       const distanceToSurface = Math.abs(bobberPos.y - pond.waterSurfaceY);
 
-      if (distanceToSurface < 2) {
+      if (distanceToSurface < surfaceProximity) {
         const yDiff = pond.waterSurfaceY - bobberPos.y;
-        const buoyancy = new BABYLON.Vector3(0, yDiff * 10, 0);
+        const vel = this.bobberPhysics.body.getLinearVelocity();
+
+        if (!this.bobberInWater && vel.y < impactVelocityThreshold) {
+          const impactIntensity = Math.min(Math.abs(vel.y) / 10, 1.5);
+          pond.createRipple(bobberPos, impactIntensity);
+        }
+        this.bobberInWater = true;
+
+        const buoyancy = new BABYLON.Vector3(0, yDiff * buoyancyForce, 0);
         this.bobberPhysics.body.applyForce(buoyancy, bobberPos);
 
-        const vel = this.bobberPhysics.body.getLinearVelocity();
-        vel.x *= 0.95;
-        vel.z *= 0.95;
-        vel.y *= 0.9;
+        vel.x *= horizontalDamping;
+        vel.z *= horizontalDamping;
+        vel.y *= verticalDamping;
         this.bobberPhysics.body.setLinearVelocity(vel);
+      } else {
+        this.bobberInWater = false;
       }
     }
   }
@@ -187,7 +203,6 @@ export class FishingRod {
       this.meshes.forEach((mesh) => mesh.setEnabled(true));
       this.isVisible = true;
 
-      // Update water render lists to include rod meshes
       if (ponds) {
         ponds.forEach((pond) => pond.updateWaterRenderList());
       }

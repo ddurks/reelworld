@@ -5,6 +5,7 @@ export class Pond {
     this.scene = scene;
     this.bounds = null;
     this.waterSurfaceY = waterMesh.position.y;
+    this.ripples = [];
 
     this.calculateBounds();
     this.setupWater();
@@ -42,11 +43,11 @@ export class Pond {
     );
     water.windForce = -5;
     water.waveHeight = 0;
-    water.bumpHeight = 0.1;
-    water.windDirection = new BABYLON.Vector2(1, 1);
+    water.bumpHeight = 0.5;
+    water.windDirection = new BABYLON.Vector2(0, -1);
     water.waterColor = new BABYLON.Color3(0.1, 0.3, 0.5);
     water.colorBlendFactor = 0.3;
-    water.waveLength = 0.1;
+    water.waveLength = 0.5;
 
     waterPlane.material = water;
 
@@ -119,7 +120,64 @@ export class Pond {
     return new BABYLON.Vector3(centerX, y, centerZ);
   }
 
-  isInBounds(position) {
+  createRipple(position, intensity = 1.0) {
+    const rippleCount = 3;
+    const rippleDelay = 200;
+    const rippleDuration = 2000;
+    const rippleExpansion = 8;
+
+    for (let i = 0; i < rippleCount; i++) {
+      const ripple = BABYLON.MeshBuilder.CreateTorus(
+        "ripple",
+        { diameter: 0.5, thickness: 0.04, tessellation: 32 },
+        this.scene
+      );
+
+      ripple.position = new BABYLON.Vector3(
+        position.x,
+        this.waterSurfaceY + 0.02,
+        position.z
+      );
+      ripple.rotation.x = 0;
+
+      const material = new BABYLON.StandardMaterial("rippleMat", this.scene);
+      material.emissiveColor = new BABYLON.Color3(0.8, 0.9, 1.0);
+      material.alpha = 0.5;
+      material.disableLighting = true;
+      ripple.material = material;
+
+      this.ripples.push({
+        mesh: ripple,
+        startTime: Date.now() + i * rippleDelay,
+        duration: rippleDuration,
+        intensity: intensity,
+        initialAlpha: 0.5,
+      });
+    }
+  }
+
+  updateRipples() {
+    const now = Date.now();
+
+    for (let i = this.ripples.length - 1; i >= 0; i--) {
+      const ripple = this.ripples[i];
+      const elapsed = now - ripple.startTime;
+      const progress = elapsed / ripple.duration;
+
+      if (progress >= 1.0) {
+        ripple.mesh.material?.dispose();
+        ripple.mesh.dispose();
+        this.ripples.splice(i, 1);
+        continue;
+      }
+
+      const scale = 1 + progress * 8 * ripple.intensity;
+      ripple.mesh.scaling = new BABYLON.Vector3(scale, 1, scale);
+      ripple.mesh.material.alpha = ripple.initialAlpha * (1 - progress);
+    }
+  }
+
+  isWithinBounds(position) {
     return (
       position.x >= this.bounds.minX &&
       position.x <= this.bounds.maxX &&

@@ -30,6 +30,7 @@ export class ReelGuy {
     this.currentExpression = "normal";
     this.lastBlinkTime = 0;
     this.nextBlinkDelay = this.getRandomBlinkDelay();
+    this.swimRippleWaves = [];
   }
 
   getRandomBlinkDelay() {
@@ -168,6 +169,32 @@ export class ReelGuy {
       }
     }
 
+    for (let i = 0; i < 3; i++) {
+      const wave = BABYLON.MeshBuilder.CreateTorus(
+        "swimWave",
+        {
+          diameter: 1.2,
+          thickness: 0.08,
+          tessellation: 32,
+        },
+        this.scene
+      );
+      wave.rotation.x = 0;
+      wave.isVisible = false;
+
+      const waveMat = new BABYLON.StandardMaterial("swimWaveMat", this.scene);
+      waveMat.emissiveColor = new BABYLON.Color3(0.8, 0.9, 1.0);
+      waveMat.alpha = 0.5;
+      waveMat.disableLighting = true;
+      wave.material = waveMat;
+
+      this.swimRippleWaves.push({
+        mesh: wave,
+        startTime: Date.now() + i * 600,
+        duration: 1200,
+      });
+    }
+
     return this;
   }
 
@@ -248,6 +275,13 @@ export class ReelGuy {
     if (!this.physicsBody || !this.ponds?.length) return;
 
     const playerPos = this.bodyMesh.position;
+    const swimRippleHeight = 0.02;
+    const waveExpansion = 1.5;
+    const bobSpeed = 2;
+    const bobAmplitude = 0.2;
+    const floatHeight = 0.99;
+    const buoyancyForce = 5;
+    const waterDamping = 0.85;
     let inWater = false;
     let waterSurfaceY = 0;
 
@@ -271,16 +305,39 @@ export class ReelGuy {
     this.isInWater = inWater;
 
     if (inWater) {
-      this.waterBobTime += delta * 2;
-      const bobAmount = Math.sin(this.waterBobTime) * 0.2;
-      const targetY = waterSurfaceY + 0.99 + bobAmount;
+      const now = Date.now();
+      this.swimRippleWaves.forEach((wave) => {
+        const elapsed = now - wave.startTime;
+        const progress = (elapsed % wave.duration) / wave.duration;
+
+        if (elapsed >= 0) {
+          wave.mesh.isVisible = true;
+          wave.mesh.position = new BABYLON.Vector3(
+            playerPos.x,
+            waterSurfaceY + swimRippleHeight,
+            playerPos.z
+          );
+
+          const scale = 1 + progress * waveExpansion;
+          wave.mesh.scaling = new BABYLON.Vector3(scale, 1, scale);
+          wave.mesh.material.alpha = 0.5 * (1 - progress);
+        }
+      });
+
+      this.waterBobTime += delta * bobSpeed;
+      const bobAmount = Math.sin(this.waterBobTime) * bobAmplitude;
+      const targetY = waterSurfaceY + floatHeight + bobAmount;
 
       const yDiff = targetY - this.bodyMesh.position.y;
       const velocity = this.physicsBody.getLinearVelocity();
-      velocity.y = yDiff * 5;
-      velocity.x *= 0.85;
-      velocity.z *= 0.85;
+      velocity.y = yDiff * buoyancyForce;
+      velocity.x *= waterDamping;
+      velocity.z *= waterDamping;
       this.physicsBody.setLinearVelocity(velocity);
+    } else {
+      this.swimRippleWaves.forEach((wave) => {
+        wave.mesh.isVisible = false;
+      });
     }
   }
 

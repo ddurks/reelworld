@@ -18,6 +18,16 @@ export class Fish {
     this.alignmentDistance = 8.0;
     this.cohesionDistance = 10.0;
     this.position = position;
+    
+    this.currentExpression = 'normal';
+    this.lastBlinkTime = 0;
+    this.nextBlinkDelay = this.getRandomBlinkDelay();
+    this.lastRippleTime = 0;
+    this.rippleCooldown = 1500;
+  }
+
+  getRandomBlinkDelay() {
+    return 2000 + Math.random() * 4000;
   }
 
   // Static factory method that properly awaits loading
@@ -46,6 +56,21 @@ export class Fish {
 
       for (let i = 1; i < result.meshes.length; i++) {
         result.meshes[i].parent = this.mesh;
+      }
+      
+      this.faceMesh = result.meshes.find((m) =>
+        m.name.toLowerCase().includes("face")
+      );
+      
+      if (this.faceMesh && this.faceMesh.material) {
+        this.faceTextures = {
+          normal: new BABYLON.Texture("./assets/faces/fisherman_faces-1.png", this.scene),
+          eyesClosed: new BABYLON.Texture("./assets/faces/fisherman_faces-3.png", this.scene)
+        };
+        
+        Object.values(this.faceTextures).forEach(texture => {
+          texture.vScale = -1;
+        });
       }
 
       const randomScale = 1 + Math.random() * 0.5;
@@ -107,6 +132,33 @@ export class Fish {
     }
 
     this.calculateWaterBounds();
+  }
+
+  setFaceExpression(expression) {
+    if (!this.faceMesh || !this.faceTextures || !this.faceMesh.material) return;
+    
+    const texture = this.faceTextures[expression];
+    if (texture) {
+      if (this.faceMesh.material.albedoTexture) {
+        this.faceMesh.material.albedoTexture = texture;
+      } else if (this.faceMesh.material.diffuseTexture) {
+        this.faceMesh.material.diffuseTexture = texture;
+      } else if (this.faceMesh.material.emissiveTexture) {
+        this.faceMesh.material.emissiveTexture = texture;
+      }
+      this.currentExpression = expression;
+    }
+  }
+
+  blink() {
+    if (!this.faceMesh || !this.faceTextures) return;
+
+    const previousExpression = this.currentExpression;
+    this.setFaceExpression("eyesClosed");
+
+    setTimeout(() => {
+      this.setFaceExpression(previousExpression);
+    }, 150);
   }
 
   calculateWaterBounds() {}
@@ -249,6 +301,13 @@ export class Fish {
   update(deltaTime) {
     if (!this.mesh || !this.physicsRoot) return;
 
+    const currentTime = Date.now();
+    if (currentTime - this.lastBlinkTime > this.nextBlinkDelay) {
+      this.blink();
+      this.lastBlinkTime = currentTime;
+      this.nextBlinkDelay = this.getRandomBlinkDelay();
+    }
+
     this.applyBoids();
 
     const waveMotion =
@@ -277,6 +336,17 @@ export class Fish {
       if (this.swimDirection.y > 0) {
         this.swimDirection.y = -Math.abs(this.swimDirection.y);
       }
+    }
+
+    const distanceFromSurface = this.pond.waterSurfaceY - this.physicsRoot.position.y;
+    if (distanceFromSurface < 1.2 && currentTime - this.lastRippleTime > this.rippleCooldown) {
+      const ripplePos = new BABYLON.Vector3(
+        this.physicsRoot.position.x,
+        this.pond.waterSurfaceY,
+        this.physicsRoot.position.z
+      );
+      this.pond.createRipple(ripplePos, 0.3);
+      this.lastRippleTime = currentTime;
     }
   }
 

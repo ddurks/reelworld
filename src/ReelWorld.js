@@ -3,6 +3,7 @@ import { Level } from "./Level.js";
 import { Fish } from "./Fish.js";
 import { ReelGuy } from "./ReelGuy.js";
 import { Pond } from "./Pond.js";
+import { Waterfall } from "./Waterfall.js";
 
 export class ReelWorld {
   constructor(canvas, isMobile) {
@@ -52,6 +53,14 @@ export class ReelWorld {
     );
 
     this.scene = new BABYLON.Scene(this.engine);
+    this.scene.autoClear = false;
+    this.scene.autoClearDepthAndStencil = false;
+    this.scene.blockMaterialDirtyMechanism = true;
+
+    if (this.isMobile) {
+      this.scene.skipPointerMovePicking = true;
+      this.scene.constantlyUpdateMeshUnderPointer = false;
+    }
 
     const light = new BABYLON.HemisphericLight(
       "light",
@@ -221,6 +230,13 @@ export class ReelWorld {
       if (mesh.material) {
         mesh.receiveShadows = true;
       }
+
+      if (
+        mesh.name !== "ground" &&
+        !mesh.name.toLowerCase().includes("water")
+      ) {
+        mesh.freezeWorldMatrix();
+      }
     });
 
     if (waterMeshes.length > 0 && groundMesh) {
@@ -229,7 +245,7 @@ export class ReelWorld {
         this.ponds.push(pond);
       }
 
-      const numFishPerPond = 10;
+      const numFishPerPond = 7;
 
       for (const pond of this.ponds) {
         const centerPos = pond.getCenterPosition();
@@ -251,10 +267,77 @@ export class ReelWorld {
           this.fish.push(newFish);
         }
 
-        // Update water render list to include newly spawned fish
         pond.updateWaterRenderList();
       }
+
+      this.createWaterfall();
+      this.createMountainWaterfall();
     }
+  }
+
+  createWaterfall() {
+    if (this.ponds.length < 2) return;
+
+    if (this.waterfall) {
+      this.waterfall.dispose();
+    }
+
+    const sortedPonds = this.ponds.sort(
+      (a, b) => b.waterSurfaceY - a.waterSurfaceY
+    );
+    const upperPond = sortedPonds[0];
+    const lowerPond = sortedPonds[1];
+
+    const startPos = new BABYLON.Vector3(0, upperPond.waterSurfaceY, -5);
+    const endPos = new BABYLON.Vector3(0, lowerPond.waterSurfaceY, -1);
+
+    this.waterfall = new Waterfall(this.scene, startPos, endPos);
+
+    const allMeshes = this.scene
+      .getNodes()
+      .filter(
+        (node) =>
+          (node instanceof BABYLON.Mesh ||
+            node instanceof BABYLON.AbstractMesh) &&
+          !node.name.includes("water")
+      );
+
+    this.waterfall.updateRenderList(allMeshes);
+  }
+
+  createMountainWaterfall() {
+    if (this.ponds.length < 2) return;
+
+    if (this.mountainWaterfall) {
+      this.mountainWaterfall.dispose();
+    }
+
+    const sortedPonds = this.ponds.sort(
+      (a, b) => b.waterSurfaceY - a.waterSurfaceY
+    );
+    const upperPond = sortedPonds[0];
+    const lowerPond = sortedPonds[1];
+
+    const mainWaterfallHeight =
+      upperPond.waterSurfaceY - lowerPond.waterSurfaceY;
+    const mountainHeight = mainWaterfallHeight;
+
+    const startHeight = upperPond.waterSurfaceY + mountainHeight;
+    const startPos = new BABYLON.Vector3(0, startHeight, -30);
+    const endPos = new BABYLON.Vector3(0, upperPond.waterSurfaceY, -28);
+
+    this.mountainWaterfall = new Waterfall(this.scene, startPos, endPos, 3, 5);
+
+    const allMeshes = this.scene
+      .getNodes()
+      .filter(
+        (node) =>
+          (node instanceof BABYLON.Mesh ||
+            node instanceof BABYLON.AbstractMesh) &&
+          !node.name.includes("water")
+      );
+
+    this.mountainWaterfall.updateRenderList(allMeshes);
   }
 
   async loadCharacter() {
@@ -297,6 +380,11 @@ export class ReelWorld {
     }
 
     this.fish.forEach((f) => f.update(deltaTime));
+
+    if (this.frameCount % 2 === 0) {
+      this.ponds.forEach((pond) => pond.updateRipples());
+    }
+
     this.scene.render();
     this.frameCount++;
   };
