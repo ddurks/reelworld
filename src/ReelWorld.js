@@ -56,6 +56,8 @@ export class ReelWorld {
     this.scene.autoClear = false;
     this.scene.autoClearDepthAndStencil = false;
     this.scene.blockMaterialDirtyMechanism = true;
+    
+    this.engine.setHardwareScalingLevel(1 / window.devicePixelRatio);
 
     if (this.isMobile) {
       this.scene.skipPointerMovePicking = true;
@@ -266,8 +268,6 @@ export class ReelWorld {
           );
           this.fish.push(newFish);
         }
-
-        pond.updateWaterRenderList();
       }
 
       this.createWaterfall();
@@ -293,16 +293,11 @@ export class ReelWorld {
 
     this.waterfall = new Waterfall(this.scene, startPos, endPos);
 
-    const allMeshes = this.scene
-      .getNodes()
-      .filter(
-        (node) =>
-          (node instanceof BABYLON.Mesh ||
-            node instanceof BABYLON.AbstractMesh) &&
-          !node.name.includes("water")
-      );
-
-    this.waterfall.updateRenderList(allMeshes);
+    const groundMesh = this.scene.getMeshByName("ground");
+    const skybox = this.scene.getMeshByName("hdrSkyBox");
+    
+    if (groundMesh) this.waterfall.waterMaterial.addToRenderList(groundMesh);
+    if (skybox) this.waterfall.waterMaterial.addToRenderList(skybox);
   }
 
   createMountainWaterfall() {
@@ -328,16 +323,15 @@ export class ReelWorld {
 
     this.mountainWaterfall = new Waterfall(this.scene, startPos, endPos, 3, 5);
 
-    const allMeshes = this.scene
-      .getNodes()
-      .filter(
-        (node) =>
-          (node instanceof BABYLON.Mesh ||
-            node instanceof BABYLON.AbstractMesh) &&
-          !node.name.includes("water")
-      );
+    const groundMesh = this.scene.getMeshByName("ground");
+    const skybox = this.scene.getMeshByName("hdrSkyBox");
 
-    this.mountainWaterfall.updateRenderList(allMeshes);
+    if (groundMesh) {
+      this.mountainWaterfall.waterMaterial.addToRenderList(groundMesh);
+    }
+    if (skybox) {
+      this.mountainWaterfall.waterMaterial.addToRenderList(skybox);
+    }
   }
 
   async loadCharacter() {
@@ -354,7 +348,6 @@ export class ReelWorld {
 
     this.hud = new HUD(this.isMobile, this.reelGuy);
 
-    // Update water render lists to include player, bobber, and fishing rod meshes
     this.ponds.forEach((pond) => pond.updateWaterRenderList());
 
     this.camera.setTarget(this.reelGuy.getPosition());

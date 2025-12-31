@@ -23,7 +23,7 @@ export class Fish {
     this.lastBlinkTime = 0;
     this.nextBlinkDelay = this.getRandomBlinkDelay();
     this.lastRippleTime = 0;
-    this.rippleCooldown = 1500;
+    this.rippleCooldown = 2500;
   }
 
   getRandomBlinkDelay() {

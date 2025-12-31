@@ -124,8 +124,6 @@ export class FishingRod {
       this.fishingLine.setAnchorPosition(rodTipPos);
     }
 
-    ponds.forEach((pond) => pond.updateWaterRenderList());
-
     setTimeout(() => {
       const rodTipPos = this.getRodTipWorldPosition();
       if (rodTipPos) {

@@ -21,7 +21,7 @@ export class Waterfall {
         height: height,
         diameterTop: this.diameterTop,
         diameterBottom: this.diameterBottom,
-        tessellation: 16,
+        tessellation: 8,
         arc: 0.5,
       },
       this.scene
@@ -59,7 +59,7 @@ export class Waterfall {
   createFoamParticles() {
     const particleSystem = new BABYLON.ParticleSystem(
       "waterfallFoam",
-      1000,
+      200,
       this.scene
     );
 
@@ -86,7 +86,7 @@ export class Waterfall {
     particleSystem.minLifeTime = 0.5;
     particleSystem.maxLifeTime = 1.5;
 
-    particleSystem.emitRate = 100;
+    particleSystem.emitRate = 20;
 
     particleSystem.blendMode = BABYLON.ParticleSystem.BLENDMODE_ADD;
 

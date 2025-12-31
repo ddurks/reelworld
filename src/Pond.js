@@ -51,11 +51,11 @@ export class Pond {
 
     waterPlane.material = water;
 
-    this.scene.meshes.forEach((mesh) => {
-      if (mesh !== waterPlane && mesh !== this.waterMesh) {
-        water.addToRenderList(mesh);
-      }
-    });
+    const groundMesh = this.scene.getMeshByName("ground");
+    const skybox = this.scene.getMeshByName("hdrSkyBox");
+
+    if (groundMesh) water.addToRenderList(groundMesh);
+    if (skybox) water.addToRenderList(skybox);
 
     this.waterPlane = waterPlane;
     this.waterMaterial = water;
@@ -64,18 +64,35 @@ export class Pond {
   updateWaterRenderList() {
     if (!this.waterMaterial) return;
 
-    this.waterMaterial.getRenderList().length = 0;
+    const pondCenter = new BABYLON.Vector3(
+      (this.bounds.minX + this.bounds.maxX) / 2,
+      this.waterSurfaceY,
+      (this.bounds.minZ + this.bounds.maxZ) / 2
+    );
+    const maxDistance = 20;
 
-    const allMeshes = this.scene
-      .getNodes()
-      .filter(
-        (node) =>
-          node instanceof BABYLON.Mesh || node instanceof BABYLON.AbstractMesh
-      );
-
-    allMeshes.forEach((mesh) => {
-      if (mesh !== this.waterPlane && mesh !== this.waterMesh) {
+    this.scene.meshes.forEach((mesh) => {
+      const meshName = mesh.name.toLowerCase();
+      if (
+        meshName.includes("guy") ||
+        meshName.includes("hat") ||
+        meshName.includes("character") ||
+        meshName.includes("body") ||
+        meshName.includes("face") ||
+        meshName.includes("rod") ||
+        meshName.includes("bobber") ||
+        meshName.includes("fish")
+      ) {
         this.waterMaterial.addToRenderList(mesh);
+      }
+    });
+
+    this.scene.meshes.forEach((mesh) => {
+      if (mesh.name.toLowerCase().includes("tree")) {
+        const distance = BABYLON.Vector3.Distance(mesh.position, pondCenter);
+        if (distance <= maxDistance) {
+          this.waterMaterial.addToRenderList(mesh);
+        }
       }
     });
   }
