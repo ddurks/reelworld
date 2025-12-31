@@ -18,8 +18,8 @@ export class Fish {
     this.alignmentDistance = 8.0;
     this.cohesionDistance = 10.0;
     this.position = position;
-    
-    this.currentExpression = 'normal';
+
+    this.currentExpression = "normal";
     this.lastBlinkTime = 0;
     this.nextBlinkDelay = this.getRandomBlinkDelay();
     this.lastRippleTime = 0;
@@ -57,18 +57,24 @@ export class Fish {
       for (let i = 1; i < result.meshes.length; i++) {
         result.meshes[i].parent = this.mesh;
       }
-      
+
       this.faceMesh = result.meshes.find((m) =>
         m.name.toLowerCase().includes("face")
       );
-      
+
       if (this.faceMesh && this.faceMesh.material) {
         this.faceTextures = {
-          normal: new BABYLON.Texture("./assets/faces/fisherman_faces-1.png", this.scene),
-          eyesClosed: new BABYLON.Texture("./assets/faces/fisherman_faces-3.png", this.scene)
+          normal: new BABYLON.Texture(
+            "./assets/faces/fisherman_faces-1.png",
+            this.scene
+          ),
+          eyesClosed: new BABYLON.Texture(
+            "./assets/faces/fisherman_faces-3.png",
+            this.scene
+          ),
         };
-        
-        Object.values(this.faceTextures).forEach(texture => {
+
+        Object.values(this.faceTextures).forEach((texture) => {
           texture.vScale = -1;
         });
       }
@@ -136,7 +142,7 @@ export class Fish {
 
   setFaceExpression(expression) {
     if (!this.faceMesh || !this.faceTextures || !this.faceMesh.material) return;
-    
+
     const texture = this.faceTextures[expression];
     if (texture) {
       if (this.faceMesh.material.albedoTexture) {
@@ -338,8 +344,12 @@ export class Fish {
       }
     }
 
-    const distanceFromSurface = this.pond.waterSurfaceY - this.physicsRoot.position.y;
-    if (distanceFromSurface < 1.2 && currentTime - this.lastRippleTime > this.rippleCooldown) {
+    const distanceFromSurface =
+      this.pond.waterSurfaceY - this.physicsRoot.position.y;
+    if (
+      distanceFromSurface < 1.2 &&
+      currentTime - this.lastRippleTime > this.rippleCooldown
+    ) {
       const ripplePos = new BABYLON.Vector3(
         this.physicsRoot.position.x,
         this.pond.waterSurfaceY,
