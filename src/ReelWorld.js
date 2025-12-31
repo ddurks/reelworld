@@ -56,7 +56,7 @@ export class ReelWorld {
     this.scene.autoClear = false;
     this.scene.autoClearDepthAndStencil = false;
     this.scene.blockMaterialDirtyMechanism = true;
-    
+
     this.engine.setHardwareScalingLevel(1 / window.devicePixelRatio);
 
     if (this.isMobile) {
@@ -71,23 +71,20 @@ export class ReelWorld {
     );
     light.intensity = 0.7;
 
-    if (!this.isMobile) {
-      try {
-        const hdrTexture = new BABYLON.HDRCubeTexture(
-          "./assets/clouds.hdr",
-          this.scene,
-          512,
-          false,
-          true,
-          false,
-          true
-        );
-        this.scene.environmentTexture = hdrTexture;
-        this.scene.createDefaultSkybox(hdrTexture, true, 10000);
-      } catch (err) {
-        console.warn("HDR texture failed:", err);
-      }
-    } else {
+    try {
+      const hdrTexture = new BABYLON.HDRCubeTexture(
+        "./assets/clouds.hdr",
+        this.scene,
+        this.isMobile ? 256 : 512,
+        false,
+        true,
+        false,
+        true
+      );
+      this.scene.environmentTexture = hdrTexture;
+      this.scene.createDefaultSkybox(hdrTexture, true, 10000);
+    } catch (err) {
+      console.warn("HDR texture failed:", err);
       this.scene.clearColor = new BABYLON.Color4(0.53, 0.81, 0.92, 1.0);
     }
 
@@ -295,7 +292,7 @@ export class ReelWorld {
 
     const groundMesh = this.scene.getMeshByName("ground");
     const skybox = this.scene.getMeshByName("hdrSkyBox");
-    
+
     if (groundMesh) this.waterfall.waterMaterial.addToRenderList(groundMesh);
     if (skybox) this.waterfall.waterMaterial.addToRenderList(skybox);
   }

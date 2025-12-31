@@ -71,6 +71,8 @@ body.mobile #canvas-container {
   position: relative;
   width: 100%;
   overflow: hidden;
+  margin-bottom: -15%;
+  z-index: 2;
 }
 
 #renderCanvas {
@@ -88,6 +90,7 @@ body.mobile #hud-container {
   width: 100%;
   pointer-events: none;
   z-index: 100;
+  flex-shrink: 0;
 }
 
 #hud-base {
