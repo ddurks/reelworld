@@ -40,7 +40,7 @@ export class ReelGuy {
   async load() {
     const result = await BABYLON.SceneLoader.ImportMeshAsync(
       "",
-      "./assets/",
+      "./assets/3d/",
       "reelguy.glb",
       this.scene
     );

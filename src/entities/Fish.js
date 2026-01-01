@@ -41,7 +41,7 @@ export class Fish {
     try {
       const result = await BABYLON.SceneLoader.ImportMeshAsync(
         "",
-        "./assets/",
+        "./assets/3d/",
         "reelfish.glb",
         this.scene
       );

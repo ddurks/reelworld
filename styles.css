@@ -12,6 +12,47 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 
+#loading-overlay-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  pointer-events: none;
+  transition: opacity 0.5s ease-out, visibility 0s 0.5s;
+}
+
+#loading-overlay-container.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+#loading-logo {
+  max-width: 80%;
+  max-height: 50%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+@media (min-width: 768px) {
+  #loading-logo {
+    max-width: 600px;
+    max-height: 400px;
+  }
+}
+
+.hidden-until-loaded {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-in;
+}
+
 #water-background {
   position: fixed;
   top: 0;
@@ -159,6 +200,12 @@ body.desktop #reelspinna-container {
   pointer-events: auto;
   left: 24.5%;
   bottom: 35%;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+#joystickWrapper1:has(.front) {
+  opacity: 1;
 }
 
 .front {

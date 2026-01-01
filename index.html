@@ -14,16 +14,19 @@
     />
     <title>reel world</title>
     <link rel="stylesheet" href="styles.css" />
-    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   </head>
   <body>
     <div id="water-background">
       <img src="assets/hud/water.gif" alt="Water" />
     </div>
+    <div id="loading-overlay-container">
+      <img src="assets/get_reel.png" alt="Get Reel" id="loading-logo" />
+    </div>
     <div id="canvas-container">
       <canvas id="renderCanvas"></canvas>
     </div>
-    <div id="hud-container">
+    <div id="hud-container" class="hidden-until-loaded">
       <img id="hud-base" src="assets/hud/controller.png" alt="HUD" />
       <img id="rod-image" src="assets/hud/rod.png" alt="Rod" />
       <div id="reelspinna-container">

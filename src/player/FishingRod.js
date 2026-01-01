@@ -23,7 +23,7 @@ export class FishingRod {
     try {
       const result = await BABYLON.SceneLoader.ImportMeshAsync(
         "",
-        "./assets/",
+        "./assets/3d/",
         "reelrod.glb",
         this.scene
       );
@@ -49,7 +49,7 @@ export class FishingRod {
     try {
       const result = await BABYLON.SceneLoader.ImportMeshAsync(
         "",
-        "./assets/",
+        "./assets/3d/",
         "bobber.glb",
         this.scene
       );

@@ -1,9 +1,9 @@
 import { HUD } from "./HUD.js";
-import { Level } from "./Level.js";
-import { Fish } from "./Fish.js";
-import { ReelGuy } from "./ReelGuy.js";
-import { Pond } from "./Pond.js";
-import { Waterfall } from "./Waterfall.js";
+import { Level } from "./environment/Level.js";
+import { Fish } from "./entities/Fish.js";
+import { ReelGuy } from "./player/ReelGuy.js";
+import { Pond } from "./environment/Pond.js";
+import { Waterfall } from "./environment/Waterfall.js";
 
 export class ReelWorld {
   constructor(canvas, isMobile) {
@@ -28,10 +28,14 @@ export class ReelWorld {
       stencil: true,
       antialias: !this.isMobile,
       powerPreference: this.isMobile ? "low-power" : "high-performance",
+      adaptToDeviceRatio: true,
+      disableWebGL2Support: false,
     };
 
     try {
-      this.engine = new BABYLON.Engine(this.canvas, true, engineOptions, false);
+      this.engine = new BABYLON.Engine(this.canvas, true, engineOptions, true);
+      this.engine.enableOfflineSupport = false;
+      this.engine.doNotHandleContextLost = true;
     } catch (err) {
       console.error("Failed to create engine:", err);
       throw err;
@@ -57,7 +61,21 @@ export class ReelWorld {
     this.scene.autoClearDepthAndStencil = false;
     this.scene.blockMaterialDirtyMechanism = true;
 
-    this.engine.setHardwareScalingLevel(1 / window.devicePixelRatio);
+    // Use adaptive scaling based on device
+    const scalingLevel = this.isMobile
+      ? 1 / window.devicePixelRatio
+      : Math.min(1 / window.devicePixelRatio, 1);
+    this.engine.setHardwareScalingLevel(scalingLevel);
+
+    console.log("=== Rendering Debug Info ===");
+    console.log("isMobile:", this.isMobile);
+    console.log("devicePixelRatio:", window.devicePixelRatio);
+    console.log("hardwareScalingLevel:", scalingLevel);
+    console.log("antialias:", !this.isMobile);
+    console.log(
+      "powerPreference:",
+      this.isMobile ? "low-power" : "high-performance"
+    );
 
     if (this.isMobile) {
       this.scene.skipPointerMovePicking = true;
@@ -73,7 +91,7 @@ export class ReelWorld {
 
     try {
       const hdrTexture = new BABYLON.HDRCubeTexture(
-        "./assets/clouds.hdr",
+        "./assets/3d/clouds.hdr",
         this.scene,
         this.isMobile ? 256 : 512,
         false,
@@ -174,7 +192,7 @@ export class ReelWorld {
   async loadScene() {
     const result = await BABYLON.SceneLoader.ImportMeshAsync(
       "",
-      "./assets/",
+      "./assets/3d/",
       "reelworld.glb",
       this.scene
     );
@@ -332,7 +350,7 @@ export class ReelWorld {
   }
 
   async loadCharacter() {
-    const spawnPosition = new BABYLON.Vector3(15, 5, 20);
+    const spawnPosition = new BABYLON.Vector3(15, 7, 20); // Increased spawn height from 5 to 10
     this.reelGuy = new ReelGuy(
       this.scene,
       spawnPosition,
@@ -393,6 +411,15 @@ export class ReelWorld {
 
   start() {
     this.engine.runRenderLoop(this.animate);
+
+    // Log FPS after a few seconds
+    setTimeout(() => {
+      console.log("=== Performance Info ===");
+      console.log("Current FPS:", this.engine.getFps().toFixed(2));
+      console.log("Delta time:", this.scene.deltaTime);
+      console.log("Active meshes:", this.scene.getActiveMeshes().length);
+      console.log("Total vertices:", this.scene.getTotalVertices());
+    }, 3000);
   }
 
   handleResize = () => {

@@ -38,7 +38,7 @@ export class Waterfall {
 
     waterMat.backFaceCulling = false;
     waterMat.bumpTexture = new BABYLON.Texture(
-      "./assets/waterfallbump.png",
+      "./assets/3d/texture/waterfallbump.png",
       this.scene
     );
     waterMat.windForce = -100;

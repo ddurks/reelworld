@@ -38,6 +38,13 @@ async function init() {
 
     reelWorld.start();
 
+    document
+      .getElementById("loading-overlay-container")
+      .classList.add("hidden");
+    document
+      .getElementById("hud-container")
+      .classList.remove("hidden-until-loaded");
+
     window.showPhysicsDebug = () => reelWorld.showPhysicsDebug();
     window.hidePhysicsDebug = () => reelWorld.hidePhysicsDebug();
     window.debugLine = () => {

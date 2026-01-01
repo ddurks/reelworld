@@ -38,7 +38,7 @@ export class Pond {
 
     water.backFaceCulling = false;
     water.bumpTexture = new BABYLON.Texture(
-      "./assets/waterbump.png",
+      "./assets/3d/texture/waterbump.png",
       this.scene
     );
     water.windForce = -5;
