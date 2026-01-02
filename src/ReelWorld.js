@@ -67,16 +67,6 @@ export class ReelWorld {
       : Math.min(1 / window.devicePixelRatio, 1);
     this.engine.setHardwareScalingLevel(scalingLevel);
 
-    console.log("=== Rendering Debug Info ===");
-    console.log("isMobile:", this.isMobile);
-    console.log("devicePixelRatio:", window.devicePixelRatio);
-    console.log("hardwareScalingLevel:", scalingLevel);
-    console.log("antialias:", !this.isMobile);
-    console.log(
-      "powerPreference:",
-      this.isMobile ? "low-power" : "high-performance"
-    );
-
     if (this.isMobile) {
       this.scene.skipPointerMovePicking = true;
       this.scene.constantlyUpdateMeshUnderPointer = false;
@@ -422,15 +412,6 @@ export class ReelWorld {
 
   start() {
     this.engine.runRenderLoop(this.animate);
-
-    // Log FPS after a few seconds
-    setTimeout(() => {
-      console.log("=== Performance Info ===");
-      console.log("Current FPS:", this.engine.getFps().toFixed(2));
-      console.log("Delta time:", this.scene.deltaTime);
-      console.log("Active meshes:", this.scene.getActiveMeshes().length);
-      console.log("Total vertices:", this.scene.getTotalVertices());
-    }, 3000);
   }
 
   handleResize = () => {
