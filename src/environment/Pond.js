@@ -50,6 +50,17 @@ export class Pond {
     water.waveLength = 0.5;
 
     waterPlane.material = water;
+    const waterPhysics = new BABYLON.PhysicsAggregate(
+      waterPlane,
+      BABYLON.PhysicsShapeType.BOX,
+      { mass: 0, restitution: 0, friction: 0.8 },
+      this.scene
+    );
+
+    if (waterPhysics.body.shape) {
+      waterPhysics.body.shape.filterMembershipMask = 4; // Water is in group 4
+      waterPhysics.body.shape.filterCollideMask = 2 | 16; // Collide with fishing line (2) and bobber (16)
+    }
 
     const groundMesh = this.scene.getMeshByName("ground");
     const skybox = this.scene.getMeshByName("hdrSkyBox");
@@ -59,6 +70,7 @@ export class Pond {
 
     this.waterPlane = waterPlane;
     this.waterMaterial = water;
+    this.waterPhysics = waterPhysics;
   }
 
   updateWaterRenderList() {

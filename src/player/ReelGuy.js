@@ -225,6 +225,42 @@ export class ReelGuy {
     }, 150);
   }
 
+  playCastAnimation(onCastCallback) {
+    const castingAnim = this.animationsMap.get("casting");
+    if (!castingAnim) {
+      // Fallback if casting animation doesn't exist - cast immediately
+      if (onCastCallback) onCastCallback();
+      return;
+    }
+
+    // Stop all other animations
+    for (const [name, anim] of this.animationsMap) {
+      if (anim.isPlaying) {
+        anim.stop();
+      }
+    }
+
+    // Play casting animation once at double speed
+    castingAnim.loopAnimation = false;
+    castingAnim.start(false, 2.0, 0, 240); // Play at 2x speed (0 to 240 frames)
+
+    // Cast the line at 4/5 through the animation
+    const totalDuration = (240 / 60) * 1000; // Assuming 60fps, convert to ms
+    const timeToFrame = ((4 / 5) * totalDuration) / 2.0; // Divide by speedRatio
+
+    setTimeout(() => {
+      if (onCastCallback) onCastCallback();
+    }, timeToFrame);
+
+    // Switch to fishing animation after casting is done
+    castingAnim.onAnimationGroupEndObservable.addOnce(() => {
+      const fishingAnim = this.animationsMap.get("fishing");
+      if (fishingAnim) {
+        fishingAnim.start(true, 1.0);
+      }
+    });
+  }
+
   toggleFishingMode() {
     if (!this.fishingRod) return;
 
@@ -233,21 +269,12 @@ export class ReelGuy {
     if (this.isFishing) {
       this.fishingRod.show(this.ponds);
 
-      setTimeout(() => {
+      // Use the casting animation utility
+      this.playCastAnimation(() => {
         if (this.fishingRod) {
           this.fishingRod.castLine(this.ponds);
         }
-      }, 500);
-
-      const fishingAnim = this.animationsMap.get("fishing");
-      if (fishingAnim) {
-        for (const [name, anim] of this.animationsMap) {
-          if (anim.isPlaying) {
-            anim.stop();
-          }
-        }
-        fishingAnim.start(true, 1.0);
-      }
+      });
     } else {
       this.fishingRod.hide();
       this.fishingRod.reelIn();
@@ -349,10 +376,11 @@ export class ReelGuy {
       joystick,
       jumpRequested,
       prevJumpRequested,
+      reelRotation,
     } = input;
 
     if (this.fishingRod) {
-      this.fishingRod.update(this.ponds);
+      this.fishingRod.update(this.ponds, reelRotation || 0);
     }
 
     this.applyWaterPhysics(delta);

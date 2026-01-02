@@ -236,7 +236,9 @@ export class HUD {
     const jumpRequested = this.keysPressed[SPACE] || this.aPressed;
 
     if (this.reelSpinnaControls?.buttonJustPressed && this.reelGuy) {
-      this.reelGuy.toggleFishingMode();
+      if (!this.reelGuy.isFishing) {
+        this.reelGuy.toggleFishingMode();
+      }
     }
 
     if (this.reelSpinnaControls) {
@@ -250,6 +252,7 @@ export class HUD {
       joystick: this.joystick,
       jumpRequested,
       prevJumpRequested: this.prevJumpRequested,
+      reelRotation: this.reelSpinnaControls?.rotation || 0,
     };
 
     this.prevJumpRequested = jumpRequested;

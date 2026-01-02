@@ -374,6 +374,50 @@ export class ReelWorld {
         spawnPosition.z + 10
       )
     );
+
+    this.setupFishingControls();
+  }
+
+  setupFishingControls() {
+    if (!this.reelGuy) return;
+
+    this.scene.onPointerObservable.add((pointerInfo) => {
+      if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
+        if (!this.reelGuy?.isFishing) return;
+
+        const pickResult = pointerInfo.pickInfo;
+        if (pickResult.hit && pickResult.pickedMesh) {
+          const meshName = pickResult.pickedMesh.name.toLowerCase();
+
+          const isFishingRodMesh =
+            meshName.includes("rod") || meshName.includes("fishing");
+          const isBobberMesh = meshName.includes("bobber");
+
+          if (isFishingRodMesh || isBobberMesh) {
+            // Reset bobber and cast again with animation
+            this.reelGuy.fishingRod.reelIn();
+            this.reelGuy.playCastAnimation(() => {
+              if (this.reelGuy?.fishingRod) {
+                this.reelGuy.fishingRod.castLine(this.reelGuy.ponds);
+              }
+            });
+            return;
+          }
+
+          const isPlayerMesh =
+            meshName.includes("reelguy") ||
+            meshName.includes("body") ||
+            meshName.includes("character") ||
+            meshName.includes("guy") ||
+            meshName.includes("face") ||
+            meshName.includes("hat");
+
+          if (isPlayerMesh) {
+            this.reelGuy.toggleFishingMode();
+          }
+        }
+      }
+    });
   }
 
   animate = () => {

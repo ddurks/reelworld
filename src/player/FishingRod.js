@@ -15,6 +15,8 @@ export class FishingRod {
     this.fishingLine = new FishingLine(scene);
     this.rodTipPosition = null;
     this.bobberInWater = false;
+    this.lastReelRotation = 0;
+    this.lastReelRotation = 0;
 
     this.loadModel();
   }
@@ -118,12 +120,6 @@ export class FishingRod {
     castVelocity.y = 4;
     this.bobberPhysics.body.setLinearVelocity(castVelocity);
 
-    this.fishingLine.createAnchor();
-    const rodTipPos = this.getRodTipWorldPosition();
-    if (rodTipPos) {
-      this.fishingLine.setAnchorPosition(rodTipPos);
-    }
-
     setTimeout(() => {
       const rodTipPos = this.getRodTipWorldPosition();
       if (rodTipPos) {
@@ -136,13 +132,27 @@ export class FishingRod {
     }, 100);
   }
 
-  updateLine() {
+  updateLine(reelRotation = 0) {
     if (!this.bobber || !this.bobber.isEnabled() || !this.reelGuy) {
       return;
     }
 
     const rodTipPos = this.getRodTipWorldPosition();
     if (!rodTipPos) return;
+
+    // Handle reeling based on rotation change
+    const rotationDelta = reelRotation - this.lastReelRotation;
+
+    // Positive rotation = reel in (remove segments), negative = reel out (add segments)
+    // Trigger on larger threshold to avoid too frequent changes
+    if (Math.abs(rotationDelta) > 10) {
+      if (rotationDelta > 0) {
+        this.fishingLine.reelIn();
+      } else {
+        this.fishingLine.reelOut();
+      }
+      this.lastReelRotation = reelRotation;
+    }
 
     this.fishingLine.update(rodTipPos, this.bobber.position);
   }
@@ -152,48 +162,12 @@ export class FishingRod {
       this.bobber.setEnabled(false);
     }
     this.bobberInWater = false;
+    this.lastReelRotation = 0;
     this.fishingLine.dispose();
   }
 
-  update(ponds) {
-    this.updateLine();
-    this._applyBobberWaterPhysics(ponds);
-  }
-
-  _applyBobberWaterPhysics(ponds) {
-    if (!this.bobber || !this.bobber.isEnabled() || !ponds?.length) return;
-
-    const bobberPos = this.bobber.position;
-    const surfaceProximity = 2;
-    const impactVelocityThreshold = -2;
-    const buoyancyForce = 15;
-    const horizontalDamping = 0.92;
-    const verticalDamping = 0.7;
-
-    for (const pond of ponds) {
-      const distanceToSurface = Math.abs(bobberPos.y - pond.waterSurfaceY);
-
-      if (distanceToSurface < surfaceProximity) {
-        const yDiff = pond.waterSurfaceY - bobberPos.y;
-        const vel = this.bobberPhysics.body.getLinearVelocity();
-
-        if (!this.bobberInWater && vel.y < impactVelocityThreshold) {
-          const impactIntensity = Math.min(Math.abs(vel.y) / 10, 1.5);
-          pond.createRipple(bobberPos, impactIntensity);
-        }
-        this.bobberInWater = true;
-
-        const buoyancy = new BABYLON.Vector3(0, yDiff * buoyancyForce, 0);
-        this.bobberPhysics.body.applyForce(buoyancy, bobberPos);
-
-        vel.x *= horizontalDamping;
-        vel.z *= horizontalDamping;
-        vel.y *= verticalDamping;
-        this.bobberPhysics.body.setLinearVelocity(vel);
-      } else {
-        this.bobberInWater = false;
-      }
-    }
+  update(ponds, reelRotation = 0) {
+    this.updateLine(reelRotation);
   }
 
   show(ponds) {
