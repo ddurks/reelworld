@@ -16,7 +16,8 @@ export class FishingRod {
     this.rodTipPosition = null;
     this.bobberInWater = false;
     this.lastReelRotation = 0;
-    this.lastReelRotation = 0;
+    this.lastBobberRippleTime = 0;
+    this.bobberRippleCooldown = 1500;
 
     this.loadModel();
   }
@@ -168,6 +169,45 @@ export class FishingRod {
 
   update(ponds, reelRotation = 0) {
     this.updateLine(reelRotation);
+    this.checkBobberWaterCollision(ponds);
+  }
+
+  checkBobberWaterCollision(ponds) {
+    if (!this.bobber || !this.bobber.isEnabled() || !ponds) return;
+
+    const bobberPos = this.bobber.position;
+    const currentTime = Date.now();
+
+    // Check if bobber is in water for each pond
+    for (const pond of ponds) {
+      const inXZBounds =
+        bobberPos.x >= pond.bounds.minX &&
+        bobberPos.x <= pond.bounds.maxX &&
+        bobberPos.z >= pond.bounds.minZ &&
+        bobberPos.z <= pond.bounds.maxZ;
+
+      if (!inXZBounds) continue;
+
+      const wasInWater = this.bobberInWater;
+      const isNowInWater = bobberPos.y <= pond.waterSurfaceY + 0.5;
+
+      // Create ripple when bobber just entered water or periodically while bobbing
+      if (
+        isNowInWater &&
+        currentTime - this.lastBobberRippleTime > this.bobberRippleCooldown
+      ) {
+        const ripplePos = new BABYLON.Vector3(
+          bobberPos.x,
+          pond.waterSurfaceY,
+          bobberPos.z
+        );
+        pond.createRipple(ripplePos, 0.5);
+        this.lastBobberRippleTime = currentTime;
+      }
+
+      this.bobberInWater = isNowInWater;
+      break;
+    }
   }
 
   show(ponds) {
