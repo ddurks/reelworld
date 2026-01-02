@@ -230,6 +230,17 @@ export class ReelWorld {
 
       if (mesh.name.toLowerCase().includes("ground") || mesh.name === "Plane") {
         groundMesh = mesh;
+
+        if (mesh.material) {
+          const bumpTexture = new BABYLON.Texture(
+            "./assets/3d/texture/grassbump.png",
+            this.scene
+          );
+          bumpTexture.level = 10.0;
+          bumpTexture.uScale = 50;
+          bumpTexture.vScale = 50;
+          mesh.material.bumpTexture = bumpTexture;
+        }
       }
 
       const physicsAggregate = new BABYLON.PhysicsAggregate(
