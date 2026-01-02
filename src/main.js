@@ -50,7 +50,6 @@ async function init() {
     window.debugLine = () => {
       if (window.fishingLines?.length > 0) {
         const line = window.fishingLines[window.fishingLines.length - 1];
-        console.log("Latest fishing line:", line);
 
         line.visibility = 1.0;
         line.setEnabled(true);
