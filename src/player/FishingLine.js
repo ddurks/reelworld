@@ -10,6 +10,7 @@ export class FishingLine {
     this.SEG_HEIGHT = 0.3;
     this.SEG_DIAMETER = 0.05;
     this.SEG_MASS = 10;
+    this.SEG_SCALE = 0.01;
   }
 
   createPhysicsRope(rodTipPos, bobberPos, bobberPhysics) {
@@ -28,7 +29,11 @@ export class FishingLine {
               this.scene
             );
 
-      segment.scaling = new BABYLON.Vector3(0.01, 0.01, 0.01); // Make segments tiny
+      segment.scaling = new BABYLON.Vector3(
+        this.SEG_SCALE,
+        this.SEG_SCALE,
+        this.SEG_SCALE
+      );
       segment.isVisible = true;
 
       const t = i / (this.NUM_SEGMENTS - 1);
@@ -36,7 +41,7 @@ export class FishingLine {
 
       let motionType =
         i === 0
-          ? BABYLON.PhysicsMotionType.ANIMATED
+          ? BABYLON.PhysicsMotionType.KINEMATIC
           : BABYLON.PhysicsMotionType.DYNAMIC;
       let shapeRadius = i === 0 ? 0.05 : this.SEG_HEIGHT / 2;
 
@@ -232,7 +237,7 @@ export class FishingLine {
 
   reelOut() {
     if (!this.bobberBody || this.segments.length >= 50) return; // Max 50 segments
-    
+
     // Need at least 2 segments (anchor + one more) to add between them
     if (this.segments.length < 2) return;
 
@@ -249,7 +254,11 @@ export class FishingLine {
       { height: this.SEG_HEIGHT, diameter: this.SEG_DIAMETER },
       this.scene
     );
-    segment.scaling = new BABYLON.Vector3(0.01, 0.01, 0.01); // Make segments tiny
+    segment.scaling = new BABYLON.Vector3(
+      this.SEG_SCALE,
+      this.SEG_SCALE,
+      this.SEG_SCALE
+    );
     segment.isVisible = true;
     segment.position = newPos;
 
@@ -397,7 +406,8 @@ export class FishingLine {
     this.setAnchorPosition(rodTipPos);
 
     // Keep segments above water surface (manual correction)
-    const waterY = this.scene.getMeshByName("waterPlane_water")?.position.y || 0;
+    const waterY =
+      this.scene.getMeshByName("waterPlane_water")?.position.y || 0;
     for (let i = 1; i < this.segments.length; i++) {
       const segment = this.segments[i];
       if (segment.position.y < waterY) {
