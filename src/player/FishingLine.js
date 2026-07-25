@@ -9,12 +9,42 @@ export class FishingLine {
     this.NUM_SEGMENTS = 20;
     this.SEG_HEIGHT = 0.3;
     this.SEG_DIAMETER = 0.05;
-    this.SEG_MASS = 10;
     this.SEG_SCALE = 0.01;
+    // The line is lighter than the bobber it hangs from, but NOT tiny: under
+    // gravity -100 the stiff 6DoF joints need real mass and rotational inertia to
+    // stay stable. (A 0.05 mass with a 0.03 collision radius gave near-zero inertia
+    // and the whole chain exploded.) The collision sphere is only used for inertia
+    // here since segments don't collide with anything, so keep it at 0.15.
+    this.SEG_MASS = 1.0;
+    this.SEG_SHAPE_RADIUS = 0.15;
+    this.LINEAR_DAMPING = 0.95;
+    this.ANGULAR_DAMPING = 0.98;
+    this.JOINT_FRICTION = 30;
+
+    // Buoyancy: submerged segments are pushed up to the surface instead of
+    // colliding with a solid water plane. Stiffness has to be strong to hold the
+    // line up against gravity -100 — a submerged segment settles about
+    // (gravity*dt / stiffness) below the target, so weak values just let it sag
+    // straight through the water.
+    this.BUOYANCY_STIFFNESS = 15;
+    this.WATER_DRAG = 0.85;
+
+    this.segCounter = 0;
+    this.linePathLength = 0;
+
+    // One material for the whole game — the old code leaked a new StandardMaterial
+    // every frame because dispose() never freed the previous one.
+    this.material = new BABYLON.StandardMaterial("lineMat", this.scene);
+    this.material.emissiveColor = new BABYLON.Color3(1, 1, 1);
+    this.material.backFaceCulling = false;
   }
 
   createPhysicsRope(rodTipPos, bobberPos, bobberPhysics) {
     if (!bobberPhysics) return;
+
+    // Guard against a stray/late cast stacking a second rope onto a live one,
+    // which corrupted the segment/constraint bookkeeping.
+    if (this.segments.length > 0) this.dispose();
 
     this.bobberBody = bobberPhysics.body;
     const zero = BABYLON.Vector3.Zero();
@@ -41,9 +71,8 @@ export class FishingLine {
 
       let motionType =
         i === 0
-          ? BABYLON.PhysicsMotionType.KINEMATIC
+          ? BABYLON.PhysicsMotionType.ANIMATED
           : BABYLON.PhysicsMotionType.DYNAMIC;
-      let shapeRadius = i === 0 ? 0.05 : this.SEG_HEIGHT / 2;
 
       let body = new BABYLON.PhysicsBody(
         segment,
@@ -52,16 +81,18 @@ export class FishingLine {
         this.scene
       );
       body.setMassProperties({ mass: this.SEG_MASS });
-      body.setAngularDamping(0.99);
-      body.setLinearDamping(0.99);
+      body.setAngularDamping(this.ANGULAR_DAMPING);
+      body.setLinearDamping(this.LINEAR_DAMPING);
       body.shape = new BABYLON.PhysicsShapeSphere(
         zero,
-        shapeRadius,
+        this.SEG_SHAPE_RADIUS,
         this.scene
       );
       body.shape.filterMembershipMask = 2; // Line segments are in group 2
-      body.shape.filterCollideMask = 2 | 4 | 16; // Collide with line segments, water, and bobber
-      body.disablePreStep = false;
+      body.shape.filterCollideMask = 0; // No solid contacts — buoyancy + constraints only
+      // Only the animated anchor is driven by writing its transform each frame;
+      // the dynamic segments are owned by the solver, so don't push their meshes in.
+      body.disablePreStep = i === 0 ? false : true;
 
       this.segments.push(segment);
     }
@@ -124,16 +155,19 @@ export class FishingLine {
         constraint
       );
 
-      constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_X, 50);
-      constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Y, 50);
-      constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Z, 50);
+      constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_X, this.JOINT_FRICTION);
+      constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Y, this.JOINT_FRICTION);
+      constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Z, this.JOINT_FRICTION);
 
       this.constraints.push(constraint);
     }
 
+    // pivotB is on the bobber, in its (upright) body frame: +Y is world-up, so a
+    // small positive Y attaches the line to the TOP of the floating bobber (radius
+    // 0.25) and the line comes cleanly off the top instead of being pinned under it.
     let bobberConstraint = new BABYLON.BallAndSocketConstraint(
       new BABYLON.Vector3(0, -this.SEG_HEIGHT / 2, 0),
-      new BABYLON.Vector3(0, 0.5, 0),
+      new BABYLON.Vector3(0, 0.3, 0),
       new BABYLON.Vector3(0, 1, 0),
       new BABYLON.Vector3(0, 1, 0),
       this.scene
@@ -227,9 +261,9 @@ export class FishingLine {
           this.segments[1].physicsBody,
           constraint
         );
-        constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_X, 50);
-        constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Y, 50);
-        constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Z, 50);
+        constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_X, this.JOINT_FRICTION);
+        constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Y, this.JOINT_FRICTION);
+        constraint.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Z, this.JOINT_FRICTION);
         this.constraints.unshift(constraint);
       }
     }
@@ -250,7 +284,7 @@ export class FishingLine {
     );
 
     const segment = BABYLON.MeshBuilder.CreateCylinder(
-      `seg${Date.now()}`,
+      `seg_${this.segCounter++}`,
       { height: this.SEG_HEIGHT, diameter: this.SEG_DIAMETER },
       this.scene
     );
@@ -270,16 +304,16 @@ export class FishingLine {
       this.scene
     );
     body.setMassProperties({ mass: this.SEG_MASS });
-    body.setAngularDamping(0.99);
-    body.setLinearDamping(0.99);
+    body.setAngularDamping(this.ANGULAR_DAMPING);
+    body.setLinearDamping(this.LINEAR_DAMPING);
     body.shape = new BABYLON.PhysicsShapeSphere(
       zero,
-      this.SEG_HEIGHT / 2,
+      this.SEG_SHAPE_RADIUS,
       this.scene
     );
     body.shape.filterMembershipMask = 2;
-    body.shape.filterCollideMask = 2 | 4 | 16; // Collide with line segments, water, and bobber
-    body.disablePreStep = false;
+    body.shape.filterCollideMask = 0; // No solid contacts — buoyancy + constraints only
+    body.disablePreStep = true;
 
     this.segments.splice(1, 0, segment);
 
@@ -337,9 +371,9 @@ export class FishingLine {
     );
 
     anchorSegment.physicsBody.addConstraint(segment.physicsBody, constraint1);
-    constraint1.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_X, 50);
-    constraint1.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Y, 50);
-    constraint1.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Z, 50);
+    constraint1.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_X, this.JOINT_FRICTION);
+    constraint1.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Y, this.JOINT_FRICTION);
+    constraint1.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Z, this.JOINT_FRICTION);
     this.constraints.unshift(constraint1);
 
     const jointYA2 = new BABYLON.Vector3(0, -this.SEG_HEIGHT / 2, 0);
@@ -394,70 +428,88 @@ export class FishingLine {
       this.segments[2].physicsBody,
       constraint2
     );
-    constraint2.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_X, 50);
-    constraint2.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Y, 50);
-    constraint2.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Z, 50);
+    constraint2.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_X, this.JOINT_FRICTION);
+    constraint2.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Y, this.JOINT_FRICTION);
+    constraint2.setAxisFriction(BABYLON.PhysicsConstraintAxis.ANGULAR_Z, this.JOINT_FRICTION);
     this.constraints.splice(1, 0, constraint2);
   }
 
-  update(rodTipPos, bobberPos) {
+  update(rodTipPos, bobberPos, ponds) {
     if (!rodTipPos || !bobberPos) return;
 
     this.setAnchorPosition(rodTipPos);
 
-    // Keep segments above water surface (manual correction)
-    const waterY =
-      this.scene.getMeshByName("waterPlane_water")?.position.y || 0;
-    for (let i = 1; i < this.segments.length; i++) {
-      const segment = this.segments[i];
-      if (segment.position.y < waterY) {
-        segment.position.y = waterY + 0.01; // Push slightly above water
-        // Reset all velocity to zero to prevent jumping
-        if (segment.physicsBody) {
-          segment.physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
-          segment.physicsBody.setAngularVelocity(BABYLON.Vector3.Zero());
+    // Buoyancy instead of solid collision: a submerged segment is eased up toward
+    // the surface (spring on Y) with horizontal drag, using the actual pond it is
+    // over. Segments in the air just fall under gravity and hang in a catenary.
+    if (ponds) {
+      for (let i = 1; i < this.segments.length; i++) {
+        const body = this.segments[i].physicsBody;
+        if (!body) continue;
+        const p = this.segments[i].position;
+        for (const pond of ponds) {
+          if (
+            p.x < pond.bounds.minX ||
+            p.x > pond.bounds.maxX ||
+            p.z < pond.bounds.minZ ||
+            p.z > pond.bounds.maxZ
+          ) {
+            continue;
+          }
+          // Float the line so the tube rests just on top of the surface. Push up
+          // only (never pull the segment down toward the target) so a submerged
+          // segment can't be dragged under — it rises and settles at the surface.
+          // The +0.15 offsets the small steady-state sag from gravity so it lands
+          // right at the waterline rather than a little below it.
+          const targetY = pond.waterSurfaceY + 0.15;
+          if (p.y < targetY) {
+            const v = body.getLinearVelocity();
+            v.y = Math.max(v.y, (targetY - p.y) * this.BUOYANCY_STIFFNESS);
+            v.x *= this.WATER_DRAG;
+            v.z *= this.WATER_DRAG;
+            body.setLinearVelocity(v);
+          }
+          break;
         }
       }
     }
 
-    // Dispose old line
-    if (this.line) {
-      this.line.dispose();
-    }
-
-    // Build path through all segments
+    // Build the visible tube through every segment and the bobber.
     const path = [];
     for (const segment of this.segments) {
       path.push(segment.position.clone());
     }
     path.push(bobberPos.clone());
 
-    if (path.length >= 2) {
+    if (path.length < 2) return;
+
+    // Reuse the tube in place; only rebuild geometry when the segment count
+    // changes (reel in/out). The material is created once, in the constructor.
+    if (!this.line || this.linePathLength !== path.length) {
+      if (this.line) this.line.dispose(false, false);
       this.line = BABYLON.MeshBuilder.CreateTube(
         "fishingLine",
-        {
-          path: path,
-          radius: 0.05,
-          updatable: false,
-        },
+        { path: path, radius: 0.05, updatable: true },
         this.scene
       );
-
-      const mat = new BABYLON.StandardMaterial("lineMat", this.scene);
-      mat.emissiveColor = new BABYLON.Color3(1, 1, 1);
-      mat.backFaceCulling = false;
-      this.line.material = mat;
+      this.line.material = this.material;
       this.line.isVisible = true;
-      this.line.visibility = 1.0;
-      this.line.renderingGroupId = 0;
+      this.linePathLength = path.length;
+    } else {
+      this.line = BABYLON.MeshBuilder.CreateTube("fishingLine", {
+        path: path,
+        instance: this.line,
+      });
     }
   }
 
   dispose() {
     if (this.line) {
-      this.line.dispose();
+      // Keep the shared material — it is reused across casts and freed in destroy().
+      this.line.dispose(false, false);
       this.line = null;
     }
+    this.linePathLength = 0;
 
     this.constraints.forEach((c) => c.dispose());
     this.constraints = [];
@@ -469,5 +521,14 @@ export class FishingLine {
       segment.dispose();
     });
     this.segments = [];
+    this.bobberBody = null;
+  }
+
+  destroy() {
+    this.dispose();
+    if (this.material) {
+      this.material.dispose();
+      this.material = null;
+    }
   }
 }

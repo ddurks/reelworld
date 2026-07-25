@@ -15,6 +15,7 @@ export class ReelGuy {
     this.animationsMap = new Map();
     this.fishingRod = null;
     this.isFishing = false;
+    this.castAnimTimer = null;
     this.currentAction = "idle";
     this.waterBobTime = 0;
     this.isInWater = false;
@@ -248,7 +249,9 @@ export class ReelGuy {
     const totalDuration = (240 / 60) * 1000; // Assuming 60fps, convert to ms
     const timeToFrame = ((4 / 5) * totalDuration) / 2.0; // Divide by speedRatio
 
-    setTimeout(() => {
+    if (this.castAnimTimer) clearTimeout(this.castAnimTimer);
+    this.castAnimTimer = setTimeout(() => {
+      this.castAnimTimer = null;
       if (onCastCallback) onCastCallback();
     }, timeToFrame);
 
@@ -271,11 +274,15 @@ export class ReelGuy {
 
       // Use the casting animation utility
       this.playCastAnimation(() => {
-        if (this.fishingRod) {
+        if (this.fishingRod && this.isFishing) {
           this.fishingRod.castLine(this.ponds);
         }
       });
     } else {
+      if (this.castAnimTimer) {
+        clearTimeout(this.castAnimTimer);
+        this.castAnimTimer = null;
+      }
       this.fishingRod.hide();
       this.fishingRod.reelIn();
 

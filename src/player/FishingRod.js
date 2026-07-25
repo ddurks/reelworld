@@ -15,7 +15,8 @@ export class FishingRod {
     this.fishingLine = new FishingLine(scene);
     this.rodTipPosition = null;
     this.bobberInWater = false;
-    this.lastReelRotation = 0;
+    this.lastReelRotation = null;
+    this.castTimer = null;
     this.lastBobberRippleTime = 0;
     this.bobberRippleCooldown = 1500;
 
@@ -64,12 +65,16 @@ export class FishingRod {
       this.bobberPhysics = new BABYLON.PhysicsAggregate(
         this.bobber,
         BABYLON.PhysicsShapeType.SPHERE,
-        { mass: 0.1, restitution: 0.3, friction: 0.5, radius: 0.25 },
+        { mass: 3, restitution: 0.3, friction: 0.5, radius: 0.25 },
         this.scene
       );
 
       this.bobberPhysics.body.setGravityFactor(1);
+      // Set mass and inertia together — passing inertia alone lets Havok recompute
+      // (and discard) the mass. The bobber is the heavy end weight the lighter line
+      // hangs from (3:1), so the rope can't whip it around. Zero inertia = no spin.
       this.bobberPhysics.body.setMassProperties({
+        mass: 3,
         inertia: new BABYLON.Vector3(0, 0, 0),
       });
       this.bobberPhysics.body.setAngularDamping(1.0);
@@ -121,7 +126,9 @@ export class FishingRod {
     castVelocity.y = 4;
     this.bobberPhysics.body.setLinearVelocity(castVelocity);
 
-    setTimeout(() => {
+    if (this.castTimer) clearTimeout(this.castTimer);
+    this.castTimer = setTimeout(() => {
+      this.castTimer = null;
       const rodTipPos = this.getRodTipWorldPosition();
       if (rodTipPos) {
         this.fishingLine.createPhysicsRope(
@@ -130,10 +137,15 @@ export class FishingRod {
           this.bobberPhysics
         );
       }
+      // The launch teleport has been applied by now; let the solver own the
+      // bobber transform again instead of re-pushing the mesh every frame.
+      if (this.bobberPhysics?.body) {
+        this.bobberPhysics.body.disablePreStep = true;
+      }
     }, 100);
   }
 
-  updateLine(reelRotation = 0) {
+  updateLine(ponds, reelRotation = 0) {
     if (!this.bobber || !this.bobber.isEnabled() || !this.reelGuy) {
       return;
     }
@@ -141,35 +153,80 @@ export class FishingRod {
     const rodTipPos = this.getRodTipWorldPosition();
     if (!rodTipPos) return;
 
-    // Handle reeling based on rotation change
-    const rotationDelta = reelRotation - this.lastReelRotation;
-
-    // Positive rotation = reel in (remove segments), negative = reel out (add segments)
-    // Trigger on larger threshold to avoid too frequent changes
-    if (Math.abs(rotationDelta) > 10) {
-      if (rotationDelta > 0) {
-        this.fishingLine.reelIn();
-      } else {
-        this.fishingLine.reelOut();
-      }
+    // The HUD reel dial only ever accumulates, so after a fresh cast we resync the
+    // baseline instead of acting on the full accumulated delta (which used to fire
+    // one unwanted reel every cast).
+    if (this.lastReelRotation === null) {
       this.lastReelRotation = reelRotation;
+    } else {
+      const rotationDelta = reelRotation - this.lastReelRotation;
+      // Positive = reel in (remove segments), negative = reel out (add segments).
+      if (Math.abs(rotationDelta) > 10) {
+        if (rotationDelta > 0) {
+          this.fishingLine.reelIn();
+        } else {
+          this.fishingLine.reelOut();
+        }
+        this.lastReelRotation = reelRotation;
+      }
     }
 
-    this.fishingLine.update(rodTipPos, this.bobber.position);
+    this.fishingLine.update(rodTipPos, this.bobber.position, ponds);
   }
 
   reelIn() {
+    if (this.castTimer) {
+      clearTimeout(this.castTimer);
+      this.castTimer = null;
+    }
     if (this.bobber) {
       this.bobber.setEnabled(false);
     }
     this.bobberInWater = false;
-    this.lastReelRotation = 0;
+    this.lastReelRotation = null;
     this.fishingLine.dispose();
   }
 
   update(ponds, reelRotation = 0) {
-    this.updateLine(reelRotation);
+    this.updateLine(ponds, reelRotation);
+    this.applyBobberBuoyancy(ponds);
     this.checkBobberWaterCollision(ponds);
+  }
+
+  applyBobberBuoyancy(ponds) {
+    if (!this.bobber || !this.bobber.isEnabled() || !ponds || !this.bobberPhysics) {
+      return;
+    }
+
+    const pos = this.bobber.position;
+    const bobberRadius = 0.25; // matches the physics sphere radius
+    for (const pond of ponds) {
+      const inXZBounds =
+        pos.x >= pond.bounds.minX &&
+        pos.x <= pond.bounds.maxX &&
+        pos.z >= pond.bounds.minZ &&
+        pos.z <= pond.bounds.maxZ;
+
+      if (!inXZBounds) continue;
+
+      // Only engage near/below the surface so the cast arc through the air is free.
+      if (pos.y <= pond.waterSurfaceY + 1.0) {
+        // Float with the base of the bobber resting on the surface, plus a gentle
+        // bob. Crucially this only ever pushes UP — it never pulls the bobber down
+        // toward the target — so buoyancy can't drag it under the surface (that was
+        // the clipping). Gravity and the solid water cylinder settle it back down
+        // between bobs, and a fast-landing cast gets caught instead of tunnelling.
+        const bob = Math.sin(performance.now() * 0.003) * 0.06;
+        const targetY = pond.waterSurfaceY + bobberRadius + bob;
+        const body = this.bobberPhysics.body;
+        const v = body.getLinearVelocity();
+        v.y = Math.max(v.y, (targetY - pos.y) * 12);
+        v.x *= 0.85;
+        v.z *= 0.85;
+        body.setLinearVelocity(v);
+      }
+      break;
+    }
   }
 
   checkBobberWaterCollision(ponds) {
@@ -229,6 +286,10 @@ export class FishingRod {
   }
 
   dispose() {
+    if (this.castTimer) {
+      clearTimeout(this.castTimer);
+      this.castTimer = null;
+    }
     if (this.meshes) {
       this.meshes.forEach((mesh) => mesh.dispose());
     }
@@ -238,6 +299,6 @@ export class FishingRod {
     if (this.bobberPhysics) {
       this.bobberPhysics.dispose();
     }
-    this.fishingLine.dispose();
+    this.fishingLine.destroy();
   }
 }

@@ -50,16 +50,36 @@ export class Pond {
     water.waveLength = 0.5;
 
     waterPlane.material = water;
+
+    // Physics collider: an invisible cylinder with real thickness. A box derived
+    // from the flat visual disc was effectively zero-thickness, so fast-moving
+    // bodies tunnelled through and popped. This cylinder's top face sits exactly
+    // at the water surface and it only reaches a little way down, leaving open
+    // water below for the fish. It collides with the bobber only — the line uses
+    // buoyancy instead of solid contact, and the fish swim through freely.
+    const WATER_COLLIDER_THICKNESS = 1.5;
+    const waterCollider = BABYLON.MeshBuilder.CreateCylinder(
+      "waterCollider_" + this.waterMesh.name,
+      { diameter: diameter, height: WATER_COLLIDER_THICKNESS, tessellation: 24 },
+      this.scene
+    );
+    waterCollider.position = new BABYLON.Vector3(
+      this.waterMesh.position.x,
+      this.waterSurfaceY - WATER_COLLIDER_THICKNESS / 2,
+      this.waterMesh.position.z
+    );
+    waterCollider.isVisible = false;
+
     const waterPhysics = new BABYLON.PhysicsAggregate(
-      waterPlane,
-      BABYLON.PhysicsShapeType.BOX,
-      { mass: 0, restitution: 0, friction: 0.8 },
+      waterCollider,
+      BABYLON.PhysicsShapeType.CYLINDER,
+      { mass: 0, restitution: 0, friction: 0.5 },
       this.scene
     );
 
     if (waterPhysics.body.shape) {
       waterPhysics.body.shape.filterMembershipMask = 4; // Water is in group 4
-      waterPhysics.body.shape.filterCollideMask = 2 | 16; // Collide with fishing line (2) and bobber (16)
+      waterPhysics.body.shape.filterCollideMask = 16; // Bobber only
     }
 
     const groundMesh = this.scene.getMeshByName("ground");
@@ -69,6 +89,7 @@ export class Pond {
     if (skybox) water.addToRenderList(skybox);
 
     this.waterPlane = waterPlane;
+    this.waterCollider = waterCollider;
     this.waterMaterial = water;
     this.waterPhysics = waterPhysics;
   }

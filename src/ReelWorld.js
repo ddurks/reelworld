@@ -209,7 +209,7 @@ export class ReelWorld {
 
         if (waterPhysics.body.shape) {
           waterPhysics.body.shape.filterMembershipMask = 4;
-          waterPhysics.body.shape.filterCollideMask = 8 | 16;
+          waterPhysics.body.shape.filterCollideMask = 8; // Fish only; bobber uses the pond cylinder
         }
 
         if (mesh.material) {
@@ -397,7 +397,7 @@ export class ReelWorld {
             // Reset bobber and cast again with animation
             this.reelGuy.fishingRod.reelIn();
             this.reelGuy.playCastAnimation(() => {
-              if (this.reelGuy?.fishingRod) {
+              if (this.reelGuy?.fishingRod && this.reelGuy.isFishing) {
                 this.reelGuy.fishingRod.castLine(this.reelGuy.ponds);
               }
             });
